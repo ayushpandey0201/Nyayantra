@@ -47,6 +47,58 @@ def citation_forms(unit: dict, inst: dict, aliases: list[str]) -> set[str]:
     return forms
 
 
+DOMAIN_OF = {"ICA": "contract", "SRA": "contract", "SGA": "contract", "ACA": "arbitration", "ITA": "technology",
+             "DPDPA": "privacy", "CA": "ip", "AA": "ethics", "BCIR": "ethics", "CPA": "consumer",
+             "IPC": "criminal", "BNS": "criminal", "IEA": "evidence", "BSA": "evidence", "LA": "procedure"}
+
+
+def load_judgment(cur, inst: dict) -> None:
+    iid = inst["instrument_id"]
+    domains = sorted({DOMAIN_OF[s.split("-")[0]] for s in inst["statutes"] if s.split("-")[0] in DOMAIN_OF}
+                     | ({"privacy"} if "privacy" in inst["topics"] else set()))
+    cur.execute(
+        """insert into instrument (instrument_id, kind, short_title, long_title, status, domains, source_url,
+               retrieved_at, source_sha256, licence_basis, neutral_citation, reporter_citations, court, bench_size,
+               judges, decided_on, parties, treatment, treatment_note, dataset)
+           values (%s,'judgment',%s,%s,'in_force',%s,%s,now(),%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+           on conflict (instrument_id) do update set short_title = excluded.short_title,
+               long_title = excluded.long_title, domains = excluded.domains, source_url = excluded.source_url,
+               source_sha256 = excluded.source_sha256, neutral_citation = excluded.neutral_citation,
+               reporter_citations = excluded.reporter_citations, bench_size = excluded.bench_size,
+               judges = excluded.judges, decided_on = excluded.decided_on, parties = excluded.parties,
+               treatment = excluded.treatment, treatment_note = excluded.treatment_note""",
+        (iid, inst["short_title"], inst["long_title"], domains, inst["source_url"], inst["source_sha256"],
+         inst["licence_basis"], inst["neutral_citation"], inst["reporter_citations"], inst["court"],
+         inst["bench_size"], inst["judges"], inst["decided_on"], inst["parties"], inst["treatment"],
+         inst.get("treatment_note"), inst["dataset"]))
+    # whole-case citation forms: neutral citation, reporter citations, case name
+    names = {inst["short_title"], inst["short_title"].split(" v. ")[0], inst["parties"]}
+    forms = {norm(inst["neutral_citation"]), *(norm(c) for c in inst["reporter_citations"])}
+    forms |= {norm(c).replace("s c r", "scr") for c in inst["reporter_citations"]}
+    forms |= {norm(n) for n in names if len(n) > 4}
+    forms |= {re.sub(r"\s+", " ", f.replace("(", " ").replace(")", " ")).strip() for f in list(forms)}  # "(2017) 10 SCC 1"
+    for f in forms:
+        cur.execute("insert into citation_index (form, unit_id, instrument_id) values (%s, null, %s) "
+                    "on conflict do nothing", (f, iid))
+    units = [json.loads(l) for l in open(PROC / "units" / f"{iid}.jsonl")]
+    cite = f"{inst['short_title']}, {inst['neutral_citation']} : {inst['reporter_citations'][0]}"
+    for sort_key, u in enumerate(units):
+        where = "headnote" if u["number"] == "HN" else (
+            f"para {u['number']}" if u["number"].isdigit() else f"segment {u['number'][1:]}")
+        cur.execute(
+            """insert into unit (unit_id, instrument_id, parent_id, unit_type, number, heading, path, text,
+                   canonical_citation, topics, statutes_cited, sort_key, source_page, token_count, content_sha256)
+               values (%s,%s,null,'paragraph',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+            (u["unit_id"], iid, u["number"], u["heading"], u["path"], u["text"],
+             f"{cite}, {where} (at p. {u['source_page']})", u.get("topics", []), u.get("statutes_cited", []),
+             sort_key, u["source_page"], len(u["text"].split()), u["content_sha256"]))
+        if u["number"].isdigit() and not u.get("part"):
+            for n in names:
+                cur.execute("insert into citation_index (form, unit_id, instrument_id) values (%s,%s,%s) "
+                            "on conflict do nothing", (norm(f"{n} para {u['number']}"), u["unit_id"], iid))
+    print(f"{iid:30} {len(units):4} units  bench {inst['bench_size']}  {inst['treatment']}")
+
+
 def main() -> None:
     src = yaml.safe_load((ROOT / "ingest" / "sources.yaml").read_text())
     catalogue = {e["id"]: e for e in src["acts"] + src["rules"]}
@@ -60,6 +112,9 @@ def main() -> None:
             meta = catalogue.get(iid, {})
             cur.execute("delete from citation_index where instrument_id = %s", (iid,))
             cur.execute("delete from unit where instrument_id = %s", (iid,))
+            if inst["kind"] == "judgment":
+                load_judgment(cur, inst)
+                continue
             cur.execute(
                 """insert into instrument (instrument_id, kind, short_title, act_number, enacted_on, commenced_on,
                        status, repealed_by, repealed_on, as_amended_upto, domains, source_url, retrieved_at,

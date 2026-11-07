@@ -31,7 +31,7 @@ def squash(t: str) -> str:
 def main(check_all: bool) -> int:
     failures, warnings = [], []
     with psycopg.connect(DSN) as conn, conn.cursor() as cur:
-        cur.execute("select instrument_id, kind, status, repealed_by, ocr from instrument order by 1")
+        cur.execute("select instrument_id, kind, status, repealed_by, ocr from instrument where kind <> 'judgment' order by 1")
         insts = cur.fetchall()
         for iid, kind, status, repealed_by, _ in insts:
             if status == "repealed" and not repealed_by:
@@ -46,13 +46,13 @@ def main(check_all: bool) -> int:
         failures += [f"{u}: empty text" for (u,) in cur.fetchall()]
         cur.execute("select unit_id, text, content_sha256 from unit")
         failures += [f"{u}: hash mismatch" for u, t, h in cur.fetchall() if hashlib.sha256(t.encode()).hexdigest() != h]
-        cur.execute("select count(*) from citation_index c left join unit u using (unit_id) where u.unit_id is null")
+        cur.execute("select count(*) from citation_index c left join unit u using (unit_id) where c.unit_id is not null and u.unit_id is null")
         if cur.fetchone()[0]:
             failures.append("citation_index has forms pointing at missing units")
 
         # Text fidelity: a sentence from each sampled unit must appear in the source PDF.
         cur.execute("""select u.unit_id, u.text, i.ocr or u.unit_type = 'schedule', i.instrument_id from unit u join instrument i using (instrument_id)
-                       where not u.omitted and length(u.text) > 80""")
+                       where not u.omitted and length(u.text) > 80 and i.kind <> 'judgment'""")
         rows = cur.fetchall()
         sample = rows if check_all else random.Random(7).sample(rows, 30)
         pdf_text: dict[str, str] = {}
@@ -74,8 +74,40 @@ def main(check_all: bool) -> int:
                 (warnings if ocr else failures).append(msg)  # OCR typo fixes and table schedules are not verbatim
         print(f"text fidelity: {len(sample) - missing}/{len(sample)} sampled units found verbatim in their PDF")
 
+        # Judgments: the official headnote cites "[Para 15] [643-B-D]"; our para 15 must start on that page
+        # (or the one before). In multi-opinion judgments para numbers repeat per opinion, so the reference
+        # is ambiguous: those are reported, and only single-opinion judgments gate the run.
+        cur.execute("select instrument_id from instrument where kind = 'judgment' order by 1")
+        tally = {"single": [0, 0, 0], "multi": [0, 0, 0]}
+        for (jid,) in cur.fetchall():
+            cur.execute("select number, source_page, path from unit where instrument_id=%s order by sort_key", (jid,))
+            rows = cur.fetchall()
+            pages_of: dict[str, set[int]] = {}
+            for num, page, _ in rows:
+                pages_of.setdefault(num, set()).add(page)
+            opinions = sum(1 for num, _, path in rows if num == "1" and "(part" not in path.replace("(part 1)", ""))
+            cur.execute("select string_agg(text, ' ' order by sort_key) from unit where instrument_id=%s and number='HN'", (jid,))
+            hn = cur.fetchone()[0] or ""
+            refs = re.findall(r"\[\s*Paras?\s+(\d+)[^\]]{0,40}\]\s*\[\s*(\d{1,4})\s*-", hn)
+            t = tally["multi" if opinions > 1 else "single"]
+            for para, page in refs:
+                starts = pages_of.get(para, ())
+                t[0] += 1
+                t[1] += any(int(page) - 1 <= p <= int(page) for p in starts)
+                t[2] += any(abs(int(page) - p) <= 2 for p in starts)
+        for kind, (n, exact, near) in tally.items():
+            if n:
+                print(f"judgment paragraphs ({kind}-opinion): headnote [Para N] [page] references match the parsed "
+                      f"paragraph's page exactly in {exact}/{n} ({exact / n:.0%}), within 2 pages in {near}/{n} ({near / n:.0%})")
+        n, _, near = tally["single"]
+        if n and near / n < 0.9:
+            failures.append(f"single-opinion paragraph alignment {near}/{n} below 90%")
+        n, _, near = tally["multi"]
+        if n and near / n < 0.9:
+            warnings.append(f"multi-opinion paragraph alignment {near}/{n}: paragraph numbers repeat across opinions")
+
     for w in warnings:
-        print("WARN", w, "(OCR or table)")
+        print("WARN", w)
     for f in failures:
         print("FAIL", f)
     print("all checks passed" if not failures else f"{len(failures)} problems")

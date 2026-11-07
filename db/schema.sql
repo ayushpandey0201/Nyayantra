@@ -43,7 +43,8 @@ create table instrument (
     judges            text[] not null default '{}',
     decided_on        date,
     parties           text,
-    treatment         text,                           -- good_law / overruled / partly_overruled (curated)
+    treatment         text,                           -- good_law / overruled / limited (curated)
+    treatment_note    text,
     dataset           text,
     parent_id         text references instrument(instrument_id),   -- Rules -> parent Act
     ocr               boolean not null default false,              -- text came from a scan
@@ -120,11 +121,12 @@ create unique index mapping_uq on mapping(old_unit_id, coalesce(new_unit_id, '')
 
 -- Every citation form the guardrail accepts -> the unit it means.
 create table citation_index (
-    form      text not null,                         -- normalised: 'ica 1872 s 27', 'contract act s 27', '(2017) 10 scc 1'
-    unit_id   text references unit(unit_id) on delete cascade,
-    instrument_id text references instrument(instrument_id) on delete cascade,
-    primary key (form, unit_id)
+    citation_id   bigserial primary key,
+    form          text not null,                     -- normalised: 'ica 1872 s 27', 'contract act s 27', '2017 10 scc 1'
+    unit_id       text references unit(unit_id) on delete cascade,      -- null = the whole instrument (a case)
+    instrument_id text references instrument(instrument_id) on delete cascade
 );
+create unique index citation_uq on citation_index(form, coalesce(unit_id, ''), instrument_id);
 create index citation_form_trgm on citation_index using gin(form gin_trgm_ops);
 
 -- Application tables.
