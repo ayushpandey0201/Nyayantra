@@ -103,3 +103,10 @@ Every response returns a trace: each stage's input, output, latency, the exact s
 - `pytest` green, including live tests that call Groq and check the redacted prompt.
 - Every route callable from `/docs`; console run of each test case.
 - Benchmark finishes with zero HTTP errors; results reproducible from the response cache.
+
+## Addendum: two LLM providers with sensitivity-aware routing (2026-11-07)
+- One OpenAI-compatible client, two providers: Groq (`https://api.groq.com/openai/v1`) primary, Google AI Studio (`https://generativelanguage.googleapis.com/v1beta/openai/`) fallback. Keys `GROQ_API_KEY`, `GEMINI_API_KEY` in `.env`.
+- Fallback on 429, 5xx and timeouts, with a short circuit breaker. Every LLM call records provider, model and whether fallback happened, in the trace and audit log.
+- **Routing by sensitivity:** Gemini's free tier ("Unpaid Services") may use prompts to improve Google products and allows human review, and Google advises against sending confidential or personal data. So public-law research may fall back to Gemini; contract text and anything derived from client documents is Groq-only, and goes to human review if Groq is unavailable. Compliance: DPDP Act s.8(5), advocate-client confidentiality (BSA s.132), OWASP LLM02.
+- Groq: enable Zero Data Retention in Data Controls.
+- Benchmark: fallback disabled; each configuration pinned to one provider and model; any provider switch is logged and reported.
