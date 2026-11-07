@@ -1,0 +1,25 @@
+# Reference material for the AAT (templates, past reports, decks). Local only, never uploaded.
+docs/reference/
+
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Generated outputs
+results/
+*.log
+
+# OS and editor
+.DS_Store
+.~*
+~$*
+.vscode/
+.idea/
