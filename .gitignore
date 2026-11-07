@@ -23,3 +23,8 @@ results/
 ~$*
 .vscode/
 .idea/
+
+# Source documents and processed data (India Code terms: personal, non-commercial use; no republication)
+data/raw/
+data/processed/
+models/
