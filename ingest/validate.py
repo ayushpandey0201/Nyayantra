@@ -106,6 +106,19 @@ def main(check_all: bool) -> int:
         if n and near / n < 0.9:
             warnings.append(f"multi-opinion paragraph alignment {near}/{n}: paragraph numbers repeat across opinions")
 
+        # Repealed Acts: every live section needs a mapping row; report how many are verified.
+        cur.execute("""select i.instrument_id, count(u.*) filter (where not u.omitted),
+                              count(m.*), count(m.*) filter (where m.verified)
+                       from instrument i join unit u using (instrument_id)
+                       left join mapping m on m.old_unit_id = u.unit_id
+                       where i.status = 'repealed' group by 1""")
+        for iid, live, mapped, verified in cur.fetchall():
+            print(f"mapping {iid}: {mapped}/{live} live sections mapped, {verified} verified, {mapped - verified} awaiting review")
+            if mapped < live:
+                failures.append(f"{iid}: {live - mapped} live sections have no mapping row")
+            if verified < mapped:
+                warnings.append(f"{iid}: {mapped - verified} mapping rows unverified (see docs/mapping_review.csv)")
+
     for w in warnings:
         print("WARN", w)
     for f in failures:

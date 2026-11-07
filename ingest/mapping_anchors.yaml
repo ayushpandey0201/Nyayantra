@@ -1,0 +1,66 @@
+# Well-known IPC -> BNS and Evidence Act -> BSA correspondences, written down independently of the
+# text matcher. They are NOT taken as truth: build_mapping.py uses them (a) to measure how often the
+# matcher agrees, and (b) to mark a row verified only when the matcher's own text comparison also agrees.
+# Disagreements go to docs/mapping_review.csv for a person to settle against both bare Acts.
+# Format: old section -> new section (with sub-section where it matters), or "omitted".
+
+ipc_bns:
+  "34": "3(5)"         # common intention
+  "96": "34"           # private defence
+  "107": "45"          # abetment of a thing
+  "109": "49"
+  "120A": "61(1)"      # criminal conspiracy defined
+  "120B": "61(2)"
+  "124A": "152"        # sedition -> acts endangering sovereignty (substantially modified)
+  "141": "189(1)"      # unlawful assembly
+  "153A": "196(1)"
+  "295A": "299"
+  "299": "100"         # culpable homicide
+  "300": "101"         # murder
+  "302": "103(1)"
+  "304": "105"
+  "304A": "106(1)"     # death by negligence
+  "304B": "80(1)"      # dowry death
+  "306": "108"         # abetment of suicide
+  "307": "109(1)"
+  "323": "115(2)"
+  "354": "74"
+  "354A": "75(1)"
+  "354D": "78(1)"
+  "363": "137(2)"
+  "375": "63"          # rape defined
+  "376": "64(1)"
+  "377": "omitted"     # read down in Navtej (2018); no BNS counterpart
+  "378": "303(1)"      # theft defined
+  "379": "303(2)"
+  "383": "308(1)"      # extortion
+  "390": "309(1)"      # robbery
+  "405": "316(1)"      # criminal breach of trust defined
+  "406": "316(2)"
+  "415": "318(1)"      # cheating defined
+  "417": "318(2)"
+  "420": "318(4)"
+  "463": "336(1)"      # forgery defined
+  "497": "omitted"     # struck down in Joseph Shine (2018)
+  "498A": "85"
+  "499": "356(1)"      # defamation defined
+  "500": "356(2)"
+  "503": "351(1)"      # criminal intimidation
+  "506": "351(2)"
+  "509": "79"
+  "511": "62"          # attempt
+
+iea_bsa:
+  "3": "2"
+  "24": "22"
+  "25": "23(1)"
+  "27": "23(2)"
+  "32": "26"
+  "45": "39(1)"
+  "65B": "63"
+  "101": "104"
+  "113A": "117"
+  "113B": "118"
+  "114": "119(1)"
+  "126": "132"
+  "138": "143"
