@@ -45,6 +45,8 @@ create table instrument (
     parties           text,
     treatment         text,                           -- good_law / overruled / partly_overruled (curated)
     dataset           text,
+    parent_id         text references instrument(instrument_id),   -- Rules -> parent Act
+    ocr               boolean not null default false,              -- text came from a scan
     created_at        timestamptz not null default now(),
     check (status <> 'repealed' or (repealed_by is not null and repealed_on is not null)),
     check (kind <> 'judgment' or decided_on is not null)
@@ -76,6 +78,8 @@ create table unit (
     char_end           int,
     token_count        int,
     content_sha256     text not null,
+    omitted            boolean not null default false,  -- repealed/omitted provision kept for history
+    ocr                boolean not null default false,
     check (valid_to is null or valid_from is null or valid_to >= valid_from)
 );
 create index unit_instrument_idx on unit(instrument_id, sort_key);
