@@ -132,6 +132,18 @@ create index chunk_unit_idx  on chunk(unit_id);
 create index chunk_tsv_idx   on chunk using gin(tsv);
 create index chunk_dense_idx on chunk using hnsw (dense halfvec_cosine_ops) with (m = 16, ef_construction = 64);
 
+-- Embeddings keyed by the hash of the text embedded. Deliberately NOT dropped above and not tied to
+-- unit/chunk, so a schema reset or a reload of units keeps the (hour-long) embedding work.
+create table if not exists embed_cache (
+    sha256          text not null,
+    embedding_model text not null,
+    model_version   text,
+    dense           halfvec(1024) not null,
+    sparse_terms    jsonb not null,
+    created_at      timestamptz not null default now(),
+    primary key (sha256, embedding_model)
+);
+
 -- Repealed or renumbered provision -> its replacement (e.g. IPC s.420 -> BNS s.318(4)).
 create table mapping (
     mapping_id   bigserial primary key,

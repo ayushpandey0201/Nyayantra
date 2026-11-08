@@ -7,7 +7,9 @@ Chunking (structure-aware):
   * omitted units ("Omitted by Act X") are not embedded; they stay findable by citation.
 Each chunk's embed_text = context header + text, so a bare "(2) ..." still says which Act and section.
 
-Resumable: chunks whose text and model are unchanged are skipped, so re-running only embeds what is new.
+Resumable: chunks whose text and model are unchanged are skipped, and every vector is also kept in
+embed_cache keyed by the text's SHA-256, so reloading units (which deletes their chunks) costs nothing to
+re-embed unless the text itself changed.
 Nothing leaves the machine: the model runs on Apple MPS (or CPU).
 
 Usage: python -m ingest.embed [--limit N] [--batch 8]
@@ -63,6 +65,16 @@ def split_text(text: str) -> list[str]:
     return out
 
 
+UPSERT = """insert into chunk (chunk_id, unit_id, seq, context_header, embed_text, dense, sparse_terms,
+                                embedding_model, model_version)
+             values (%s,%s,%s,%s,%s,%s::halfvec,%s,%s,%s)
+             on conflict (chunk_id) do update set unit_id=excluded.unit_id, seq=excluded.seq,
+               context_header=excluded.context_header, embed_text=excluded.embed_text,
+               dense=excluded.dense, sparse_terms=excluded.sparse_terms,
+               embedding_model=excluded.embedding_model, model_version=excluded.model_version,
+               ingested_at=now()"""
+
+
 def build_chunks(cur) -> list[dict]:
     cur.execute("""select u.unit_id, u.text, u.path, u.heading, i.short_title, i.kind
                    from unit u join instrument i using (instrument_id)
@@ -92,11 +104,25 @@ def main() -> None:
         done = {cid: hashlib.sha256(t.encode()).hexdigest() for cid, t in cur.fetchall()}
         conn.commit()
         todo = [c for c in chunks if done.get(c["chunk_id"]) != c["sha"]]
+        # vectors already computed for the same text (e.g. before a reload of units)
+        cur.execute("select sha256, model_version, dense::text, sparse_terms from embed_cache "
+                    "where embedding_model=%s and sha256 = any(%s)", (MODEL, [c["sha"] for c in todo]))
+        cached = {r[0]: r[1:] for r in cur.fetchall()}
+        if cached:
+            reuse = [c for c in todo if c["sha"] in cached]
+            cur.executemany(UPSERT, [(c["chunk_id"], c["unit_id"], c["seq"], c["context_header"], c["embed_text"],
+                                      cached[c["sha"]][1], json.dumps(cached[c["sha"]][2]), MODEL, cached[c["sha"]][0])
+                                     for c in reuse])
+            conn.commit()
+            todo = [c for c in todo if c["sha"] not in cached]
+            print(f"{len(reuse)} restored from embed_cache")
         print(f"{len(chunks)} chunks from units; {len(chunks) - len(todo)} already embedded; {len(todo)} to embed"
               + (f" (this run: {args.limit})" if args.limit else ""))
         if args.limit:
             todo = todo[:args.limit]
         if not todo:
+            cur.execute("analyze chunk")
+            conn.commit()
             return
 
         import torch
@@ -123,15 +149,10 @@ def main() -> None:
                 rows.append((c["chunk_id"], c["unit_id"], c["seq"], c["context_header"], c["embed_text"],
                              "[" + ",".join(f"{x:.6f}" for x in vec.tolist()) + "]", json.dumps(sparse),
                              MODEL, str(version)))
-            cur.executemany(
-                """insert into chunk (chunk_id, unit_id, seq, context_header, embed_text, dense, sparse_terms,
-                                      embedding_model, model_version)
-                   values (%s,%s,%s,%s,%s,%s::halfvec,%s,%s,%s)
-                   on conflict (chunk_id) do update set unit_id=excluded.unit_id, seq=excluded.seq,
-                     context_header=excluded.context_header, embed_text=excluded.embed_text,
-                     dense=excluded.dense, sparse_terms=excluded.sparse_terms,
-                     embedding_model=excluded.embedding_model, model_version=excluded.model_version,
-                     ingested_at=now()""", rows)
+            cur.executemany(UPSERT, rows)
+            cur.executemany("insert into embed_cache (sha256, embedding_model, model_version, dense, sparse_terms) "
+                            "values (%s,%s,%s,%s::halfvec,%s) on conflict do nothing",
+                            [(c["sha"], MODEL, str(version), r[5], r[6]) for c, r in zip(group, rows)])
             conn.commit()
             n += len(group)
             rate = n / (time.time() - t0)

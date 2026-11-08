@@ -1,0 +1,103 @@
+# Gold set for Stage 4 (retrieval). Each question lists one or more gold GROUPS; a group is satisfied
+# when ANY of its units is retrieved. "SC-2006-PERCEPT:*" means any paragraph of that judgment.
+#   hit@k     = at least one group satisfied in the top k
+#   recall@k  = share of groups satisfied in the top k (all groups count equally)
+# Questions Q01-Q18 come from the earlier prototype (docs/reference/legal_services_v1, re-keyed to unit IDs);
+# the rest were written for this corpus. `as_of` is what the query-understanding stage would extract.
+# `kind`: statute / case / mixed / repealed (asks about old law by number or as new law) / hindi / asof.
+# Out-of-corpus and invented-case questions are not here; they test refusal in Stage 6, not retrieval.
+
+- {id: Q01, kind: statute, q: "Which section of the Indian Contract Act, 1872 deals with agreements in restraint of trade, and what is its effect?", gold: [[ICA-1872:s27]]}
+- {id: Q02, kind: mixed, q: "Is a clause barring an employee from joining a competitor for two years after leaving the job enforceable under Indian contract law?", gold: [[ICA-1872:s27], ["SC-2006-PERCEPT:*", "SC-1967-GOLIKARI:*", "SC-1980-SUPERINTENDENCE:*", "SC-1995-GUJARAT-BOTTLING:*"]]}
+- {id: Q03, kind: statute, q: "Which section of the Indian Contract Act governs compensation for loss caused by breach of contract?", gold: [[ICA-1872:s73]]}
+- {id: Q04, kind: mixed, q: "What does Indian law say about a contract clause that stipulates a fixed sum payable on breach (liquidated damages or penalty)?", gold: [[ICA-1872:s74], ["SC-2015-KAILASH-NATH:*", "SC-1963-FATEH-CHAND:*", "SC-2003-SAW-PIPES:*", "SC-1969-MAULA-BUX:*"]]}
+- {id: Q05, kind: statute, q: "A contract says the parties may never approach any court over any dispute. Is that valid under the Indian Contract Act?", gold: [[ICA-1872:s28]]}
+- {id: Q06, kind: statute, q: "What are the essential elements of a valid contract under section 10 of the Indian Contract Act?", gold: [[ICA-1872:s10]]}
+- {id: Q07, kind: statute, q: "Which section of the Indian Contract Act says an agreement is void if its object is unlawful or opposed to public policy?", gold: [[ICA-1872:s23]]}
+- {id: Q08, kind: statute, q: "How does the Indian Contract Act define a contract of indemnity, and in which section?", gold: [[ICA-1872:s124]]}
+- {id: Q09, kind: mixed, q: "What happens under the Indian Contract Act if performance becomes impossible after the contract is made?", gold: [[ICA-1872:s56], ["SC-1953-SATYABRATA:*", "SC-2017-ENERGY-WATCHDOG:*"]]}
+- {id: Q10, kind: statute, q: "What makes consent 'free' under the Indian Contract Act?", gold: [[ICA-1872:s14]]}
+- {id: Q11, kind: statute, q: "Under the Arbitration and Conciliation Act 1996, what are the grounds and the time limit for challenging an arbitral award?", gold: [[ACA-1996:s34]]}
+- {id: Q12, kind: statute, q: "What must a court do when a dispute covered by an arbitration agreement is brought before it, under the Arbitration and Conciliation Act 1996?", gold: [[ACA-1996:s8]]}
+- {id: Q13, kind: statute, q: "Which section of the Arbitration and Conciliation Act 1996 covers court appointment of arbitrators when parties fail to agree?", gold: [[ACA-1996:s11]]}
+- {id: Q14, kind: statute, q: "Which provision of India's DPDP Act 2023 requires a data fiduciary to take security safeguards?", gold: [[DPDPA-2023:s8]]}
+- {id: Q15, kind: statute, q: "What standard must consent meet under section 6 of the DPDP Act 2023?", gold: [[DPDPA-2023:s6]]}
+- {id: Q16, kind: statute, q: "What is the maximum penalty under the DPDP Act 2023 for failing to take reasonable security safeguards?", gold: [[DPDPA-2023:sch1]]}
+- {id: Q17, kind: statute, q: "Which section of the Advocates Act 1961 deals with professional misconduct, and what punishments can follow?", gold: [[AA-1961:s35]]}
+- {id: Q18, kind: statute, q: "What protection does Indian evidence law give to lawyer-client communications?", gold: [[BSA-2023:s132]]}
+- {id: Q19, kind: case, q: "Which Indian Supreme Court judgment recognised privacy as a fundamental right?", gold: [["SC-2017-PUTTASWAMY:*"]]}
+
+# contract (ICA, SRA, SGA, LA)
+- {id: C01, kind: statute, q: "Can a minor enter into a binding contract in India?", gold: [[ICA-1872:s11]]}
+- {id: C02, kind: statute, q: "How does Indian law define a contract of guarantee and who is the surety?", gold: [[ICA-1872:s126]]}
+- {id: C03, kind: mixed, q: "When is acceptance of an offer complete if it is communicated by post or telephone?", gold: [[ICA-1872:s4], ["SC-1965-KEDIA:*"]]}
+- {id: C04, kind: case, q: "Can a public employer enforce a termination clause in a standard-form employment contract signed by employees with no bargaining power?", gold: [["SC-1986-BROJO-NATH:*"]]}
+- {id: C05, kind: statute, q: "Which contracts cannot be specifically enforced by a court?", gold: [[SRA-1963:s14]]}
+- {id: C06, kind: statute, q: "Can a court grant an injunction to enforce a negative covenant in a contract even if it will not order specific performance?", gold: [[SRA-1963:s42]]}
+- {id: C07, kind: statute, q: "What happens if a suit is filed after the limitation period has expired?", gold: [[LA-1963:s3]]}
+- {id: C08, kind: statute, q: "What implied condition about quality or fitness applies when goods are bought for a particular purpose?", gold: [[SGA-1930:s16]]}
+- {id: C09, kind: statute, q: "When does ownership pass to the buyer in a sale of specific goods in a deliverable state?", gold: [[SGA-1930:s20]]}
+
+# arbitration
+- {id: A01, kind: statute, q: "Can a court grant interim relief before arbitral proceedings begin?", gold: [[ACA-1996:s9]]}
+- {id: A02, kind: case, q: "Does Part I of the Arbitration Act apply to arbitrations seated outside India?", gold: [["SC-2012-BALCO:*"]]}
+- {id: A03, kind: mixed, q: "Can the managing director of one party unilaterally appoint the sole arbitrator?", gold: [["SC-2019-PERKINS:*", "SC-2024-CORE-ECI-SPIC:*"], [ACA-1996:s12]]}
+- {id: A04, kind: case, q: "What is patent illegality as a ground for setting aside a domestic arbitral award?", gold: [["SC-2019-SSANGYONG:*", "SC-2014-ASSOCIATE-BUILDERS:*", "SC-2003-SAW-PIPES:*"]]}
+- {id: A05, kind: case, q: "Are landlord-tenant disputes under the Transfer of Property Act arbitrable?", gold: [["SC-2020-VIDYA-DROLIA:*"]]}
+- {id: A06, kind: case, q: "Is an arbitration agreement in an unstamped contract void or unenforceable?", gold: [["SC-2023-INTERPLAY-STAMP:*"]]}
+- {id: A07, kind: case, q: "Can a court modify an arbitral award instead of setting it aside?", gold: [["SC-2025-GAYATRI-BALASAMY:*"]]}
+- {id: A08, kind: case, q: "What does the fundamental policy of Indian law mean when challenging an arbitral award, after Western Geco?", gold: [["SC-2014-WESTERN-GECO:*", "SC-2014-ASSOCIATE-BUILDERS:*"]]}
+
+# data protection and IT
+- {id: D01, kind: statute, q: "How must a data fiduciary inform the Board and affected persons of a personal data breach?", gold: [[DPDPR-2025:r7]]}
+- {id: D02, kind: statute, q: "What consent is needed before processing a child's personal data?", gold: [[DPDPA-2023:s9, DPDPR-2025:r10]]}
+- {id: D03, kind: statute, q: "Does a data principal have a right to have their personal data erased?", gold: [[DPDPA-2023:s12]]}
+- {id: D04, kind: statute, q: "What must the notice to a data principal contain when consent is requested?", gold: [[DPDPA-2023:s5, DPDPR-2025:r3]]}
+- {id: D05, kind: statute, q: "How does a consent manager get registered and what are its obligations?", gold: [[DPDPR-2025:r4]]}
+- {id: D06, kind: statute, q: "Is a company liable to pay compensation if it is negligent in protecting sensitive personal data it holds?", gold: [[ITA-2000:s43A]]}
+- {id: D07, kind: mixed, q: "When is an online intermediary exempt from liability for content posted by users?", gold: [[ITA-2000:s79], ["SC-2015-SHREYA-SINGHAL:*"]]}
+- {id: D08, kind: case, q: "Why was section 66A of the IT Act struck down?", gold: [["SC-2015-SHREYA-SINGHAL:*"]]}
+- {id: D09, kind: case, q: "Is an indefinite suspension of internet services constitutional?", gold: [["SC-2020-ANURADHA-BHASIN:*"]]}
+- {id: D10, kind: case, q: "Was the Aadhaar scheme upheld, and what did the Court say about linking it to bank accounts?", gold: [["SC-2018-PUTTASWAMY-AADHAAR:*"]]}
+
+# evidence
+- {id: E01, kind: mixed, q: "Is a certificate mandatory for admitting an electronic record such as a WhatsApp message in evidence?", gold: [[BSA-2023:s63], ["SC-2020-KHOTKAR:*", "SC-2014-ANVAR:*"]]}
+- {id: E02, kind: case, q: "Can an accused be subjected to a narco-analysis or polygraph test without consent?", gold: [["SC-2010-SELVI:*"]]}
+
+# copyright
+- {id: P01, kind: statute, q: "Which uses of a copyrighted work count as fair dealing and are not infringement?", gold: [[CA-1957:s52]]}
+- {id: P02, kind: mixed, q: "When is copyright infringed, and how is a film adaptation of a play judged for copying?", gold: [[CA-1957:s51], ["SC-1978-RG-ANAND:*"]]}
+- {id: P03, kind: case, q: "Is there copyright in the copy-edited text of Supreme Court judgments published in law reports?", gold: [["SC-2007-EASTERN-BOOK:*"]]}
+
+# professional ethics
+- {id: L01, kind: statute, q: "Can an advocate advertise or solicit work in India?", gold: [[BCIR-PVI:r36]]}
+- {id: L02, kind: statute, q: "Who is entitled to practise law in Indian courts?", gold: [[AA-1961:s29, AA-1961:s33]]}
+- {id: L03, kind: case, q: "Can lawyers go on strike or boycott courts?", gold: [["SC-2002-HARISH-UPPAL:*"]]}
+- {id: L04, kind: case, q: "Is an advocate who retains a client's file to force payment of fees guilty of misconduct?", gold: [["SC-2000-RD-SAXENA:*"]]}
+
+# consumer
+- {id: K01, kind: statute, q: "What is an unfair contract under the Consumer Protection Act 2019?", gold: [[CPA-2019:s2]]}
+- {id: K02, kind: case, q: "Are services rendered by doctors covered by consumer protection law?", gold: [["SC-1995-VP-SHANTHA:*"]]}
+- {id: K03, kind: statute, q: "When is a product manufacturer liable in a product liability action?", gold: [[CPA-2019:s84]]}
+
+# criminal (current law is the BNS)
+- {id: R01, kind: repealed, q: "What is the punishment for cheating under the new criminal law?", gold: [[BNS-2023:s318]]}
+- {id: R02, kind: statute, q: "What is the punishment for murder in India?", gold: [[BNS-2023:s103]]}
+- {id: R03, kind: repealed, q: "Which provision of the BNS replaced section 420 of the IPC?", gold: [[BNS-2023:s318]]}
+- {id: R04, kind: repealed, q: "Is sedition still an offence after the IPC was replaced?", gold: [[BNS-2023:s152]]}
+- {id: R05, kind: statute, q: "What is criminal defamation and how is it punished?", gold: [[BNS-2023:s356]]}
+- {id: R06, kind: repealed, q: "What does IPC 498A now correspond to?", gold: [[BNS-2023:s85, BNS-2023:s86]]}
+- {id: R07, kind: case, q: "Should police arrest automatically for offences punishable with less than seven years?", gold: [["SC-2014-ARNESH-KUMAR:*"]]}
+- {id: R08, kind: case, q: "Is registration of an FIR mandatory when information discloses a cognizable offence?", gold: [["SC-2013-LALITA-KUMARI:*"]]}
+- {id: R09, kind: case, q: "Why was adultery decriminalised?", gold: [["SC-2018-JOSEPH-SHINE:*"]]}
+- {id: R10, kind: case, q: "Is consensual sex between adults of the same sex still a crime?", gold: [["SC-2018-NAVTEJ-JOHAR:*"]]}
+
+# Hindi
+- {id: H01, kind: hindi, q: "क्या नौकरी छोड़ने के बाद प्रतिस्पर्धी कंपनी में काम न करने की शर्त भारत में लागू होती है?", gold: [[ICA-1872:s27, "SC-2006-PERCEPT:*", "SC-1967-GOLIKARI:*", "SC-1980-SUPERINTENDENCE:*"]]}
+- {id: H02, kind: hindi, q: "व्यक्तिगत डेटा उल्लंघन होने पर डेटा फिड्यूशियरी को बोर्ड को कैसे सूचित करना होगा?", gold: [[DPDPR-2025:r7, DPDPA-2023:s8]]}
+- {id: H03, kind: hindi, q: "भारत में हत्या के लिए क्या सजा है?", gold: [[BNS-2023:s103]]}
+
+# as of a past date (the old law applies)
+- {id: T01, kind: asof, as_of: 2020-06-30, q: "Under which provision was cheating punishable in 2020?", gold: [[IPC-1860:s417, IPC-1860:s420, IPC-1860:s415]]}
+- {id: T02, kind: asof, as_of: 2022-12-31, q: "What was the punishment for murder at the end of 2022?", gold: [[IPC-1860:s302]]}
+- {id: T03, kind: asof, as_of: 2023-06-01, q: "Did a contract clause requiring payment of a fixed sum on breach need proof of actual loss, as of mid-2023?", gold: [[ICA-1872:s74], ["SC-2015-KAILASH-NATH:*", "SC-1963-FATEH-CHAND:*", "SC-2003-SAW-PIPES:*", "SC-1969-MAULA-BUX:*"]]}

@@ -17,6 +17,7 @@ import datetime as dt
 import hashlib
 import json
 import re
+from collections import Counter
 import sys
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -51,6 +52,55 @@ class Line:
     size: float
     markers: list[str] = field(default_factory=list)
 
+
+
+SMALL_WORDS = {"of", "to", "or", "by", "in", "an", "as", "at", "on", "be", "no", "is"}
+
+
+def corpus_vocab(exclude: str = "") -> Counter:
+    """Word counts over the other Acts already parsed (data/processed/units), for resplit()."""
+    v: Counter = Counter()
+    for f in (Path(__file__).resolve().parents[1] / "data" / "processed" / "units").glob("*.jsonl"):
+        if f.name.startswith("SC-") or f.stem == exclude:
+            continue
+        for line in f.read_text().splitlines():
+            v.update(re.findall(r"[a-z]{2,}", json.loads(line)["text"].lower()))
+    return v
+
+
+def resplit(text: str, vocab: Counter) -> str:
+    """Split tokens like 'Offencesagainst' or 'Againstthe' into words seen at least 3 times in the Act.
+    A token that is itself a known word is left alone; the split with the fewest pieces wins."""
+    def seg(w: str) -> list[str] | None:
+        best: list[list[str] | None] = [[]] + [None] * len(w)
+        for i in range(1, len(w) + 1):
+            for j in range(max(0, i - 20), i):
+                piece = w[j:i]
+                if best[j] is not None and ((len(piece) >= 3 and vocab[piece] >= 3) or piece in SMALL_WORDS):
+                    cand = best[j] + [piece]
+                    if best[i] is None or len(cand) < len(best[i]):
+                        best[i] = cand
+        return best[len(w)]
+
+    out = []
+    for tok in text.split():
+        core = re.sub(r"\W+$", "", tok)
+        tail = tok[len(core):]
+        w = core.lower()
+        if len(w) < 5 or not w.isalpha():
+            out.append(tok)
+            continue
+        parts = seg(w)
+        if vocab[w] < 2 and not parts:  # a rare word glued to a function word: "Weightsand", "Contemptsof"
+            for fw in ("and", "of", "the", "to", "or", "by", "in"):
+                if w.endswith(fw) and len(w) - len(fw) >= 4:
+                    parts = (seg(w[:-len(fw)]) or [w[:-len(fw)]]) + [fw]
+                    break
+        if vocab[w] < 2 and parts and len(parts) > 1:
+            out.append(" ".join(parts) + tail)
+        else:
+            out.append(tok)
+    return " ".join(out)
 
 def clean(text: str) -> str:
     text = text.replace(" ", " ").replace("’", "'").replace("‘", "'")
@@ -165,6 +215,9 @@ def parse(entry: dict, kind: str) -> tuple[dict, list[dict]]:
     lines = lines[start:]
     left = min(l.x for l in lines if not l.bold) if lines else 72
 
+    # vocabulary of this Act, to re-split words the PDF ran together in headings ("Againstthe")
+    vocab = corpus_vocab(exclude=inst_id)  # other Acts only: this PDF's own headers repeat the glued forms
+
     units: list[dict] = []
     chapter = part = group = None
     schedule_no = 0
@@ -224,7 +277,7 @@ def parse(entry: dict, kind: str) -> tuple[dict, list[dict]]:
             while not title and j < len(lines) and lines[j].text.isupper() and not SEC_START.match(lines[j].text):
                 title = lines[j].text
                 j += 1
-            label = f"{ch.group(1).title()} {ch.group(2).upper()}" + (f" {title.title()}" if title else "")
+            label = f"{ch.group(1).title()} {ch.group(2).upper()}" + (f" {resplit(title, vocab).title()}" if title else "")
             if ch.group(1).upper() == "PART":
                 part, chapter = label, None
             else:
