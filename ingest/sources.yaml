@@ -21,7 +21,7 @@ acts:
   - {id: IEA-1872,   file: IEA-1872.pdf,   title: "The Indian Evidence Act, 1872",                  number: "Act No. 1 of 1872",  status: repealed, repealed_by: BSA-2023, repealed_on: 2024-07-01, domains: [evidence], commenced: 1872-09-01, aliases: [IEA, Evidence Act, Indian Evidence Act]}
 
 rules:   # also saved into data/raw/acts/
-  - {id: DPDPR-2025, file: DPDPR-2025.pdf, title: "Digital Personal Data Protection Rules, 2025", where: "MeitY: Gazette G.S.R. 846(E), 13 Nov 2025 (Hindi then English)", parent: DPDPA-2023, domains: [privacy], commenced: 2025-11-13, aliases: [DPDP Rules]}
+  - {id: DPDPR-2025, file: DPDPR-2025.pdf, title: "Digital Personal Data Protection Rules, 2025", notified: 2025-11-13, where: "MeitY: Gazette G.S.R. 846(E), 13 Nov 2025 (Hindi then English)", parent: DPDPA-2023, domains: [privacy], commenced: 2025-11-13, aliases: [DPDP Rules]}
   - {id: BCIR-PVI,   file: BCIR-PVI.pdf,   title: "Bar Council of India Rules, Part VI (Rules on Professional Standards)", where: "Bar Council of Gujarat copy (scanned); barcouncilofindia.org has no PDF", parent: AA-1961, parser: scanned, domains: [ethics], aliases: [BCI Rules, Bar Council of India Rules]}
 
 judgments:   # fetched by script from s3://indian-supreme-court-judgments (CC-BY-4.0); ~50 chosen to match test questions

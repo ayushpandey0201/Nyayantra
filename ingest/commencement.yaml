@@ -1,0 +1,43 @@
+# Provisions that did not (or do not yet) come into force on the instrument's commencement date.
+# Applied by ingest/enrich.py to unit.valid_from and instrument.status.
+# A provision listed with `on: null` has not been notified: it is in the text but not in force.
+# Each block names its notification; `verify: true` means re-check the date against the Gazette
+# before relying on it (these were entered from secondary reading, not from the Gazette PDF itself).
+
+DPDPA-2023:
+  source: "MeitY notification under s.1(2), Gazette of India, 13 Nov 2025 (issued with the DPDP Rules, 2025)"
+  verify: true
+  default: 2027-05-13          # everything not listed below: 18 months after notification
+  phases:
+    - from: 2025-11-13
+      units: [s1, s2, s18, s19, s20, s21, s22, s23, s24, s25, s26, s35, s38, s39, s40, s41, s42, s43]
+      note: "Board, definitions and miscellaneous provisions in force on notification"
+    - from: 2025-11-13
+      units: [s44]
+      note: "s.44(1) and (3) in force on notification; s.44(2) (amendment of the RTI Act) from 13 May 2027"
+    - from: 2027-05-13
+      units: [s6]
+      note: "s.6(9) (consent managers, registration) from 13 Nov 2026; rest of s.6 from 13 May 2027"
+    - from: 2027-05-13
+      units: [s27]
+      note: "s.27(1)(d) from 13 Nov 2026; rest of s.27 from 13 May 2027"
+
+DPDPR-2025:
+  source: "DPDP Rules 2025, rule 1(2)-(4), G.S.R. 846(E), 13 Nov 2025 (checked against the Gazette text we hold)"
+  verify: false
+  default: 2027-05-13
+  phases:
+    - from: 2025-11-13
+      units: [r1, r2, r17, r18, r19, r20, r21]
+      note: "in force on publication"
+    - from: 2026-11-13
+      units: [r4]
+      note: "consent managers: one year after publication"
+
+BNS-2023:
+  source: "MHA notification S.O. 850(E), 23 Feb 2024 (commencement 1 Jul 2024)"
+  verify: true
+  phases:
+    - from: 2024-07-01
+      units: [s106]
+      note: "s.106(2) (hit-and-run) was excluded from the commencement notification and is not in force"

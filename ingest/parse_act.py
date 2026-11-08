@@ -287,6 +287,14 @@ def parse(entry: dict, kind: str) -> tuple[dict, list[dict]]:
             u["unit_id"] += f"~{seen[u['unit_id']]}"
         else:
             seen[u["unit_id"]] = 1
+        # India Code prints state / UT amendments inside the section, after the central text. They change
+        # the law only in that State, so they are kept apart from the central text.
+        parts = re.split(r"\n?STATE AMENDMENTS?\s*\n?", u["text"])
+        u["text"] = parts[0].strip()
+        u["state_amendments"] = []
+        for block in parts[1:]:
+            m = re.match(r"\s*([^\n—–]+?)\s*(?:\.?—|\.?–|\n|\.\s)", block)
+            u["state_amendments"].append({"state": m.group(1).strip() if m else None, "text": block.strip()})
         head_and_text = (u["heading"] or "") + " " + u["text"][:80]
         omitted = len(u["text"]) < 120 and re.search(r"\b(Omitted|Repealed|Rep\.)", head_and_text, re.I)
         u["omitted"] = bool(omitted)

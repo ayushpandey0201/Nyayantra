@@ -59,18 +59,19 @@ def load_judgment(cur, inst: dict) -> None:
     cur.execute(
         """insert into instrument (instrument_id, kind, short_title, long_title, status, domains, source_url,
                retrieved_at, source_sha256, licence_basis, neutral_citation, reporter_citations, court, bench_size,
-               judges, decided_on, parties, treatment, treatment_note, dataset)
-           values (%s,'judgment',%s,%s,'in_force',%s,%s,now(),%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+               judges, decided_on, parties, treatment, treatment_note, dataset, bench_line, statutes_cited)
+           values (%s,'judgment',%s,%s,'in_force',%s,%s,now(),%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
            on conflict (instrument_id) do update set short_title = excluded.short_title,
                long_title = excluded.long_title, domains = excluded.domains, source_url = excluded.source_url,
                source_sha256 = excluded.source_sha256, neutral_citation = excluded.neutral_citation,
                reporter_citations = excluded.reporter_citations, bench_size = excluded.bench_size,
                judges = excluded.judges, decided_on = excluded.decided_on, parties = excluded.parties,
-               treatment = excluded.treatment, treatment_note = excluded.treatment_note""",
+               treatment = excluded.treatment, treatment_note = excluded.treatment_note,
+               bench_line = excluded.bench_line, statutes_cited = excluded.statutes_cited""",
         (iid, inst["short_title"], inst["long_title"], domains, inst["source_url"], inst["source_sha256"],
          inst["licence_basis"], inst["neutral_citation"], inst["reporter_citations"], inst["court"],
          inst["bench_size"], inst["judges"], inst["decided_on"], inst["parties"], inst["treatment"],
-         inst.get("treatment_note"), inst["dataset"]))
+         inst.get("treatment_note"), inst["dataset"], inst.get("bench_line"), inst["statutes"]))
     # whole-case citation forms: neutral citation, reporter citations, case name
     names = {inst["short_title"], inst["short_title"].split(" v. ")[0], inst["parties"]}
     forms = {norm(inst["neutral_citation"]), *(norm(c) for c in inst["reporter_citations"])}
@@ -87,11 +88,12 @@ def load_judgment(cur, inst: dict) -> None:
             f"para {u['number']}" if u["number"].isdigit() else f"segment {u['number'][1:]}")
         cur.execute(
             """insert into unit (unit_id, instrument_id, parent_id, unit_type, number, heading, path, text,
-                   canonical_citation, topics, statutes_cited, sort_key, source_page, token_count, content_sha256)
-               values (%s,%s,null,'paragraph',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                   canonical_citation, topics, statutes_cited, sort_key, source_page, token_count, content_sha256,
+                   opinion_author)
+               values (%s,%s,null,'paragraph',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
             (u["unit_id"], iid, u["number"], u["heading"], u["path"], u["text"],
              f"{cite}, {where} (at p. {u['source_page']})", u.get("topics", []), u.get("statutes_cited", []),
-             sort_key, u["source_page"], len(u["text"].split()), u["content_sha256"]))
+             sort_key, u["source_page"], len(u["text"].split()), u["content_sha256"], u.get("opinion_author")))
         if u["number"].isdigit() and not u.get("part"):
             for n in names:
                 cur.execute("insert into citation_index (form, unit_id, instrument_id) values (%s,%s,%s) "
@@ -148,12 +150,13 @@ def main() -> None:
                 cur.execute(
                     """insert into unit (unit_id, instrument_id, unit_type, number, heading, path, text,
                            canonical_citation, aliases, valid_from, valid_to, amended_by, sort_key, source_page,
-                           token_count, content_sha256, omitted, ocr)
-                       values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
+                           token_count, content_sha256, omitted, ocr, state_amendments)
+                       values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)""",
                     (u["unit_id"], iid, u["unit_type"], u["number"], u["heading"], u["path"], u["text"], canonical,
                      [f"{a} {word} {u['number']}" for a in aliases], valid_from, inst.get("repealed_on"),
                      Jsonb(u.get("amended_by", [])), sort_key, u.get("source_page"),
-                     len(u["text"].split()), u["content_sha256"], u.get("omitted", False), u.get("ocr", False)))
+                     len(u["text"].split()), u["content_sha256"], u.get("omitted", False), u.get("ocr", False),
+                     Jsonb(u.get("state_amendments", []))))
                 for form in citation_forms(u, inst, aliases):
                     cur.execute("insert into citation_index (form, unit_id, instrument_id) values (%s,%s,%s) "
                                 "on conflict do nothing", (form, u["unit_id"], iid))

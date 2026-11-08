@@ -6,7 +6,7 @@
 create extension if not exists vector;
 create extension if not exists pg_trgm;
 
-drop table if exists audit_log, review, request, citation_index, mapping, chunk, unit, instrument cascade;
+drop table if exists audit_log, review, request, citation_index, mapping, defined_term, chunk, unit, instrument cascade;
 drop type if exists instrument_kind, instrument_status, unit_kind, map_relation cascade;
 
 create type instrument_kind   as enum ('act', 'rules', 'regulation', 'judgment');
@@ -46,6 +46,14 @@ create table instrument (
     treatment         text,                           -- good_law / overruled / limited (curated)
     treatment_note    text,
     dataset           text,
+    bench_line        text,                           -- bench as printed in the S.C.R.
+    statutes_cited    text[] not null default '{}',   -- case level (curated)
+    cites_judgments   text[] not null default '{}',   -- other corpus judgments it cites
+    cited_by_judgments text[] not null default '{}',
+    overruled_by      text references instrument(instrument_id) deferrable initially deferred,
+    overruled_on      date,
+    commencement_source text,                         -- notification the commencement dates come from
+    metadata_notes    jsonb not null default '{}',    -- field -> how it was derived
     parent_id         text references instrument(instrument_id),   -- Rules -> parent Act
     ocr               boolean not null default false,              -- text came from a scan
     created_at        timestamptz not null default now(),
@@ -75,18 +83,36 @@ create table unit (
     statutes_cited     text[] not null default '{}',  -- for judgment paragraphs
     sort_key           int not null default 0,
     source_page        int,
-    char_start         int,
-    char_end           int,
     token_count        int,
     content_sha256     text not null,
     omitted            boolean not null default false,  -- repealed/omitted provision kept for history
     ocr                boolean not null default false,
+    text_valid_from    date,                          -- current wording in force since (latest amendment)
+    commencement_note  text,
+    opinion_author     text,                          -- judgment paragraphs: whose opinion
+    state_amendments   jsonb not null default '[]',   -- [{"state", "text"}], kept out of the central text
+    external_refs      text[] not null default '{}',  -- references to law outside the corpus
+    cites_judgments    text[] not null default '{}',  -- judgment instrument_ids cited here
     check (valid_to is null or valid_from is null or valid_to >= valid_from)
 );
 create index unit_instrument_idx on unit(instrument_id, sort_key);
 create index unit_topics_idx     on unit using gin(topics);
 create index unit_clause_idx     on unit using gin(clause_types);
 create index unit_validity_idx   on unit(valid_from, valid_to);
+create index unit_author_idx     on unit(opinion_author) where opinion_author is not null;
+
+-- Terms defined by a statute ("data fiduciary" means ...), so answers can quote the definition.
+create table defined_term (
+    term          text not null,
+    term_norm     text not null,
+    instrument_id text not null references instrument(instrument_id) on delete cascade,
+    unit_id       text not null references unit(unit_id) on delete cascade,
+    clause        text not null default '',     -- '(i)' within s.2; '' if none
+    verb          text not null,                    -- means / includes / denotes / is said to ...
+    definition    text not null,
+    primary key (term_norm, unit_id, clause)
+);
+create index defined_term_trgm on defined_term using gin(term_norm gin_trgm_ops);
 
 -- 3. What gets embedded and searched.
 create table chunk (

@@ -1,0 +1,80 @@
+# Contract clause types -> the provisions that govern them. Curated by hand; enrich.py writes these
+# into unit.clause_types and fails if any listed unit is missing from the database.
+# The labels match the contract-analysis test set (NON_COMPETE -> non_compete, etc.).
+
+non_compete:                 # restraint of trade
+  - ICA-1872:s27
+penalty:                     # penalty / liquidated damages / forfeiture
+  - ICA-1872:s74
+  - ICA-1872:s73
+unlimited_liability:         # damages measure, remoteness, mitigation
+  - ICA-1872:s73
+  - ICA-1872:s74
+one_sided_indemnity:
+  - ICA-1872:s124
+  - ICA-1872:s125
+court_access_waiver:         # ouster of courts / limitation shortened by contract
+  - ICA-1872:s28
+  - LA-1963:s3
+unilateral_termination:
+  - ICA-1872:s39
+  - ICA-1872:s64
+  - ICA-1872:s75
+  - SRA-1963:s14
+unilateral_amendment:        # consent, novation, unfair terms in standard forms
+  - ICA-1872:s13
+  - ICA-1872:s14
+  - ICA-1872:s62
+  - CPA-2019:s2
+  - CPA-2019:s49
+auto_renewal:
+  - CPA-2019:s2
+  - CPA-2019:s49
+unconscionable_terms:
+  - ICA-1872:s16
+  - ICA-1872:s23
+  - CPA-2019:s2
+data_sharing:                # processing and sharing personal data under a contract
+  - DPDPA-2023:s4
+  - DPDPA-2023:s5
+  - DPDPA-2023:s6
+  - DPDPA-2023:s7
+  - DPDPA-2023:s8
+  - DPDPA-2023:s16
+  - ITA-2000:s43A
+  - ITA-2000:s72A
+overbroad_ip:                # assignment of copyright and future works
+  - CA-1957:s17
+  - CA-1957:s18
+  - CA-1957:s19
+  - CA-1957:s19A
+arbitration:
+  - ACA-1996:s7
+  - ACA-1996:s8
+  - ACA-1996:s11
+  - ACA-1996:s12
+  - ACA-1996:s20
+  - ACA-1996:s34
+governing_law:
+  - ACA-1996:s2
+  - ACA-1996:s28
+force_majeure:
+  - ICA-1872:s32
+  - ICA-1872:s56
+confidentiality:
+  - ICA-1872:s27
+  - ITA-2000:s72A
+electronic_execution:        # e-contracts and e-signatures
+  - ITA-2000:s3A
+  - ITA-2000:s5
+  - ITA-2000:s10A
+  - BSA-2023:s63
+specific_performance:
+  - SRA-1963:s10
+  - SRA-1963:s14
+  - SRA-1963:s20
+  - SRA-1963:s41
+limitation_period:
+  - LA-1963:s3
+  - LA-1963:s18
+  - LA-1963:s19

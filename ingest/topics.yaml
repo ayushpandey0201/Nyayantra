@@ -1,0 +1,82 @@
+# Topic tags for statutory units. A tag applies when its pattern matches the section HEADING, or the
+# chapter/part title in its PATH (case-insensitive regex). Headings are printed by the legislature, so
+# this stays precise; the section body is not searched. Slugs match the judgment topics in
+# judgments.yaml so a filter like topics @> '{non_compete}' finds both the Act and the cases.
+# Optional `only:` limits a tag to some instruments.
+
+restraint_of_trade:      {heading: "restraint of trade"}
+non_compete:             {heading: "restraint of trade"}
+penalty:                 {heading: "penalty stipulated|breach of contract where penalty"}
+liquidated_damages:      {heading: "penalty stipulated|compensation for (loss|breach)"}
+damages:                 {heading: "compensation for (loss|breach)|damages"}
+frustration:             {heading: "impossible|impossibility"}
+force_majeure:           {heading: "impossible|contingent"}
+formation:               {heading: "proposal|acceptance|communication|revocation|what agreements are contracts", only: [ICA-1872, SGA-1930]}
+acceptance:              {heading: "acceptance"}
+consent:                 {only: [ICA-1872, DPDPA-2023, DPDPR-2025, BNS-2023, IPC-1860, SGA-1930], heading: "\\bconsent\\b|free consent|coercion|undue influence|fraud|misrepresentation|mistake"}
+capacity:                {heading: "competent to contract|minor|sound mind"}
+void_agreements:         {heading: "\\bvoid\\b|unlawful|consideration and object"}
+consideration:           {heading: "consideration"}
+contingent_contracts:    {path: "contingent contracts"}
+performance:             {path: "performance of (the )?contract"}
+quasi_contract:          {path: "relations resembling those created by contract"}
+indemnity:               {heading: "indemnity"}
+guarantee:               {heading: "guarantee|surety"}
+bailment:                {path: "bailment"}
+pledge:                  {heading: "pledge|pawn"}
+agency:                  {path: "\\bagency\\b"}
+sale_of_goods:           {only: [SGA-1930], path: "."}
+specific_performance:    {heading: "specific performance|contracts (which|not) .*specifically enforced|specifically enforce"}
+injunction:              {heading: "injunction"}
+limitation:              {only: [LA-1963], path: "."}
+arbitration_agreement:   {heading: "arbitration agreement"}
+arbitrator_appointment:  {heading: "appointment of arbitrator|grounds for challenge|challenge procedure|failure or impossibility to act|termination of mandate"}
+arbitral_award_challenge: {heading: "setting aside|application for setting aside"}
+interim_measures:        {heading: "interim measures"}
+seat_of_arbitration:     {heading: "place of arbitration"}
+enforcement_of_award:    {heading: "enforcement|enforceable"}
+foreign_seated_arbitration: {path: "enforcement of certain foreign awards"}
+conciliation:            {path: "conciliation"}
+personal_data:           {only: [DPDPA-2023, DPDPR-2025], heading: "personal data|processing"}
+data_protection:         {only: [DPDPA-2023, DPDPR-2025, ITA-2000], heading: "data|personal|security practices|privacy"}
+consent_manager:         {heading: "consent manager"}
+data_breach:             {only: [DPDPA-2023, DPDPR-2025, ITA-2000], heading: "breach"}
+data_principal_rights:   {path: "rights and duties of data principal"}
+children_data:           {only: [DPDPA-2023, DPDPR-2025], heading: "child"}
+data_protection_board:   {path: "data protection board|powers, functions and procedure"}
+intermediary_liability:  {heading: "intermediar"}
+electronic_records:      {heading: "electronic record|electronic form|electronic signature|digital signature|electronic evidence"}
+electronic_evidence:     {heading: "electronic record|electronic evidence|admissibility of electronic"}
+cyber_offences:          {only: [ITA-2000], path: "offences"}
+copyright_infringement:  {heading: "infring"}
+copyright_ownership:     {heading: "owner|assignment|licen"}
+fair_dealing:            {heading: "certain acts not to be infringement"}
+professional_misconduct: {heading: "misconduct|disciplinary"}
+professional_conduct:    {only: [BCIR-PVI], path: "."}
+right_to_practise:       {path: "right to practise"}
+enrolment:               {path: "admission and enrolment"}
+consumer:                {only: [CPA-2019], path: "."}
+unfair_contract:         {heading: "unfair contract"}
+unfair_trade_practice:   {heading: "unfair trade practice"}
+product_liability:       {path: "product liability"}
+deficiency_in_service:   {heading: "deficiency"}
+cheating:                {heading: "cheating"}
+theft:                   {heading: "theft"}
+criminal_breach_of_trust: {heading: "criminal breach of trust"}
+defamation:              {heading: "defamation"}
+cruelty:                 {heading: "cruelty"}
+homicide:                {heading: "murder|culpable homicide|death"}
+sexual_offences:         {heading: "rape|sexual|voyeurism|stalking|modesty"}
+criminal_conspiracy:     {heading: "conspiracy"}
+abetment:                {heading: "abet"}
+private_defence:         {heading: "private defence"}
+general_exceptions:      {path: "general exceptions"}
+forgery:                 {heading: "forg"}
+criminal_intimidation:   {heading: "intimidation"}
+confession:              {heading: "confession"}
+burden_of_proof:         {heading: "burden of proof|burden of proving"}
+presumption:             {heading: "presum"}
+privilege:               {heading: "professional communication|privileged|communications during marriage|official communication"}
+witness:                 {path: "of witnesses|examination of witnesses"}
+documentary_evidence:    {path: "documentary evidence"}
+definitions:             {heading: "^definitions?$|interpretation|^definitions\\.?"}

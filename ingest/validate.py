@@ -28,6 +28,94 @@ def squash(t: str) -> str:
     return re.sub(r"[^a-z0-9]", "", t.lower())
 
 
+def metadata_checks(cur, failures: list[str], warnings: list[str]) -> None:
+    """Completeness and consistency of the enriched metadata (ingest/enrich.py)."""
+    # instrument fields that must be set
+    cur.execute("""select instrument_id, kind, long_title, enacted_on, commenced_on, as_amended_upto, domains,
+                          bench_size, judges, decided_on, neutral_citation, reporter_citations, status
+                   from instrument""")
+    for (iid, kind, lt, en, com, amd, dom, bench, judges, dec, nc, reps, status) in cur.fetchall():
+        need = {"domains": dom}
+        if kind == "judgment":
+            need |= {"judges": judges, "bench_size": bench, "decided_on": dec, "neutral_citation": nc,
+                     "reporter_citations": reps}
+            if bench and bench != len(judges):
+                failures.append(f"{iid}: bench_size {bench} but {len(judges)} judges")
+            if bench == 1:
+                warnings.append(f"{iid}: single-judge bench (check the bench line)")
+        else:
+            need |= {"long_title": lt}
+            if iid != "BCIR-PVI":  # the scanned BCI Rules carry no amendment history
+                need |= {"as_amended_upto": amd}
+            if iid != "BCIR-PVI":  # BCI Rules: adoption date not printed in the scan we hold
+                need |= {"enacted_on": en, "commenced_on": com}
+        for f, v in need.items():
+            if not v:
+                failures.append(f"{iid}: {f} missing")
+
+    # units
+    cur.execute("""select i.kind, count(*),
+                          count(*) filter (where u.valid_from is null),
+                          count(*) filter (where cardinality(u.topics) = 0),
+                          count(*) filter (where u.heading is null or u.heading = '')
+                   from unit u join instrument i using (instrument_id) where not u.omitted group by 1""")
+    for kind, n, no_from, no_topic, no_head in cur.fetchall():
+        print(f"metadata {kind:8}: {n} units; valid_from missing {no_from}, no topic {no_topic}, no heading {no_head}")
+        if kind == "judgment" and no_from:
+            failures.append(f"{no_from} judgment paragraphs without valid_from")
+    cur.execute("""select count(*) from unit u join instrument i using (instrument_id)
+                   where i.kind <> 'judgment' and u.valid_from is null and i.instrument_id <> 'BCIR-PVI'
+                     and u.commencement_note is null""")
+    if n := cur.fetchone()[0]:
+        failures.append(f"{n} statutory units with no valid_from and no commencement note")
+
+    # every cross-reference resolves (they are stored only when resolved; recheck after reloads)
+    cur.execute("""select count(*) from unit u, unnest(u.cross_refs || u.statutes_cited) r
+                   where not exists (select 1 from unit x where x.unit_id = r)""")
+    if n := cur.fetchone()[0]:
+        failures.append(f"{n} cross-references point at missing units")
+    cur.execute("""select u.unit_id, e from unit u, unnest(u.external_refs) e
+                   where e like '%(not found)' and u.instrument_id not like 'SC-%' order by 1""")
+    nf = cur.fetchall()
+    if nf:
+        warnings.append(f"{len(nf)} statutory references to a section number the corpus does not have, e.g. "
+                        + ", ".join(f"{u} -> {e}" for u, e in nf[:6]))
+    cur.execute("select count(*) from unit where cardinality(cross_refs) > 0")
+    print(f"metadata: {cur.fetchone()[0]} units have resolved cross-references")
+
+    # definitions: every definitions section yields terms
+    cur.execute("""select u.unit_id from unit u where u.heading ~* '^definitions?\\.?$' and not u.omitted
+                   and not exists (select 1 from defined_term d where d.unit_id = u.unit_id)""")
+    for (u,) in cur.fetchall():
+        failures.append(f"{u}: definitions section but no defined terms extracted")
+    cur.execute("select count(*), count(distinct term_norm), count(distinct instrument_id) from defined_term")
+    n, t, i = cur.fetchone()
+    print(f"metadata: {n} definitions ({t} distinct terms) across {i} instruments")
+
+    # judgments: overruled cases close their validity, and the overruling case exists
+    cur.execute("""select instrument_id from instrument where treatment = 'overruled'
+                   and (overruled_by is null or overruled_on is null)""")
+    failures += [f"{u}: overruled but no overruled_by/overruled_on" for (u,) in cur.fetchall()]
+    cur.execute("""select count(*) from unit u join instrument i using (instrument_id)
+                   where i.overruled_on is not null and (u.valid_to is distinct from i.overruled_on)""")
+    if n := cur.fetchone()[0]:
+        failures.append(f"{n} paragraphs of overruled judgments without valid_to")
+    cur.execute("""select instrument_id, count(*) filter (where opinion_author is null and number <> 'HN'), count(*)
+                   from unit where instrument_id like 'SC-%' group by 1 having
+                   count(*) filter (where opinion_author is null and number <> 'HN') > 0 order by 1""")
+    unattributed = cur.fetchall()
+    if unattributed:
+        warnings.append(f"{len(unattributed)} judgments have paragraphs with no opinion author: "
+                        + ", ".join(f"{j} ({n}/{t})" for j, n, t in unattributed))
+    # instrument status agrees with unit commencement
+    cur.execute("""select i.instrument_id from instrument i where i.status = 'in_force' and exists
+                   (select 1 from unit u where u.instrument_id = i.instrument_id and u.valid_from > current_date)""")
+    failures += [f"{u}: status in_force but some provisions start in the future" for (u,) in cur.fetchall()]
+    # state amendments never leak into the central text
+    cur.execute("select unit_id from unit where text ~ 'STATE AMENDMENT'")
+    failures += [f"{u}: state amendment text inside the central text" for (u,) in cur.fetchall()]
+
+
 def main(check_all: bool) -> int:
     failures, warnings = [], []
     with psycopg.connect(DSN) as conn, conn.cursor() as cur:
@@ -118,6 +206,8 @@ def main(check_all: bool) -> int:
                 failures.append(f"{iid}: {live - mapped} live sections have no mapping row")
             if verified < mapped:
                 warnings.append(f"{iid}: {mapped - verified} mapping rows unverified (see docs/mapping_review.csv)")
+
+        metadata_checks(cur, failures, warnings)
 
     for w in warnings:
         print("WARN", w)
