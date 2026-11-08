@@ -47,6 +47,7 @@ class Options:
     legal_status: bool = True               # off = plain search, used as a baseline in eval
     pin_citations: bool = True
     diversity: bool = True
+    link_statutes: bool = True              # add the provision the retrieved judgments are about
 
 
 ELIGIBLE = """
@@ -190,12 +191,12 @@ def _fuse(lists: dict[str, list[str]]) -> tuple[list[str], dict[str, dict], dict
 UNIT_SQL = """select u.unit_id, u.instrument_id, i.kind::text, i.short_title, u.canonical_citation, u.heading, u.path,
                      u.text, u.unit_type::text, u.valid_from, u.valid_to, u.commencement_note, u.opinion_author,
                      i.status::text, i.repealed_by, i.repealed_on, i.commenced_on, i.decided_on, i.overruled_by,
-                     i.overruled_on, i.reporter_citations, u.statutes_cited, u.topics
+                     i.overruled_on, i.reporter_citations, u.statutes_cited, u.topics, i.statutes_cited
               from unit u join instrument i using (instrument_id) where u.unit_id = any(%s)"""
 UNIT_COLS = ["unit_id", "instrument_id", "kind", "title", "citation", "heading", "path", "text", "unit_type",
              "valid_from", "valid_to", "commencement_note", "opinion_author", "instrument_status", "repealed_by",
              "repealed_on", "commenced_on", "decided_on", "overruled_by", "overruled_on", "reporter_citations",
-             "statutes_cited", "topics"]
+             "statutes_cited", "topics", "case_statutes"]
 
 
 def _units(cur, ids: list[str]) -> dict[str, dict]:
@@ -316,16 +317,60 @@ def retrieve(query: str, filters: Filters | None = None, opts: Options | None = 
         trace["dropped"] = dropped
         t["legal_status"] = time.perf_counter() - t0
 
+        # linked authority: the provision the retrieved judgments are about (curated case-level statutes),
+        # when two of them cite it, or the best-ranked one does, and search has not found it already
+        linked = []
+        if o.link_statutes:
+            votes: dict[str, set[str]] = {}
+            top_cases = []
+            for x in items[n_pinned:n_pinned + 10]:
+                u = info[x["unit_id"]]
+                if u["kind"] == "judgment" and u["instrument_id"] not in top_cases:
+                    top_cases.append(u["instrument_id"])
+                    for st in u["case_statutes"] or []:
+                        votes.setdefault(st, set()).add(u["instrument_id"])
+            have = {x["unit_id"] for x in items[:n_pinned + RERANK_POOL]} | {(x.get("via") or {}).get("replaces") for x in items}
+            cand = [st for st, by in sorted(votes.items(), key=lambda kv: -len(kv[1]))
+                    if st not in have and (len(by) >= 2 or (top_cases and top_cases[0] in by))][:2]
+            if cand:
+                info.update(_units(cur, [c for c in cand if c not in info]))
+                if o.legal_status:
+                    succ.update(_successors(cur, cand))
+                    info.update(_units(cur, [m["new"] for c in cand for m in succ.get(c, []) if m["new"] and m["new"] not in info]))
+                before = len(items)
+                for c in cand:
+                    add(c, "linked", {"cited_by": sorted(votes[c])})
+                new = items[before:]
+                if o.legal_status:  # a linked repealed provision is shown through its successor only
+                    new = [x for x in new if x["status"] != "repealed"]
+                items = items[:before]
+                linked = new
+            trace["linked"] = [{"unit_id": x["unit_id"], "cited_by": sorted(votes.get(x["unit_id"], set()))} for x in linked]
+
         pinned_items, rest = items[:n_pinned], items[n_pinned:]
+        if linked:  # give linked provisions a place in the rerank pool (or, without rerank, after the top 3)
+            at = RERANK_POOL - len(linked) if o.rerank else min(3, len(rest))
+            rest = rest[:at] + linked + rest[at:]
         pool = rest[:RERANK_POOL]
         if o.rerank and pool:
             t0 = time.perf_counter()
-            cur.execute("select chunk_id, embed_text from chunk where chunk_id = any(%s)",
-                        ([x["best_chunk"] for x in pool],))
+            # a successor (BNS s.318) is also scored through the text of the provision it replaces
+            # (IPC s.417 "Punishment for cheating"): the old heading often matches the question better
+            proxies = {x["via"]["replaces"]: best.get(x["via"]["replaces"], f'{x["via"]["replaces"]}#0')
+                       for x in pool[:8] if x.get("via") and x["source"] == "successor"}
+            proxies = dict(list(proxies.items())[:4])
+            want = [x["best_chunk"] for x in pool] + list(proxies.values())
+            cur.execute("select chunk_id, embed_text from chunk where chunk_id = any(%s)", (want,))
             texts = dict(cur.fetchall())
-            scores = models.rerank(query, [texts.get(x["best_chunk"], info[x["unit_id"]]["text"])[:1500] for x in pool])
-            for x, s in zip(pool, scores):
-                x["ranks"] = {**x["ranks"], "rerank": round(s, 4)}
+            passages = [texts.get(x["best_chunk"], info[x["unit_id"]]["text"])[:1500] for x in pool]
+            proxy_ids = [u for u, c in proxies.items() if c in texts]
+            scores = models.rerank(query, passages + [texts[proxies[u]][:1500] for u in proxy_ids])
+            proxy_score = dict(zip(proxy_ids, scores[len(pool):]))
+            for x, s in zip(pool, scores[:len(pool)]):
+                inherited = proxy_score.get((x.get("via") or {}).get("replaces"), 0.0) if x["source"] == "successor" else 0.0
+                x["ranks"] = {**x["ranks"], "rerank": round(max(s, inherited), 4)}
+                if inherited > s:
+                    x["ranks"]["rerank_via_replaced"] = True
             pool.sort(key=lambda x: -x["ranks"]["rerank"])
             t["rerank"] = time.perf_counter() - t0
         rest = pool + rest[RERANK_POOL:]
@@ -356,3 +401,30 @@ def retrieve(query: str, filters: Filters | None = None, opts: Options | None = 
             "topics": u["topics"], "scores": x["ranks"]})
     trace["timings_ms"] = {k: round(v * 1000, 1) for k, v in t.items()}
     return {"hits": hits, "trace": trace}
+
+
+def fetch(unit_ids: list[str], as_of: dt.date | None = None) -> list[dict]:
+    """Units by id, in the same shape and with the same legal-status rules as retrieve() hits.
+    A repealed unit is returned with its mapped successor(s) right after it."""
+    d = as_of or dt.date.today()
+    with psycopg.connect(DSN) as conn, conn.cursor() as cur:
+        info = _units(cur, unit_ids)
+        succ = _successors(cur, list(info))
+        info.update(_units(cur, [m["new"] for v in succ.values() for m in v if m["new"] and m["new"] not in info]))
+    out = []
+    for uid in unit_ids:
+        if uid not in info:
+            continue
+        status, note = status_of(info[uid], d)
+        if status == "overruled":
+            continue
+        u = info[uid]
+        out.append({"rank": len(out) + 1, "unit_id": uid, "instrument_id": u["instrument_id"], "kind": u["kind"],
+                    "title": u["title"], "citation": u["citation"], "heading": u["heading"], "path": u["path"],
+                    "text": u["text"], "status": status, "status_note": note, "via": None, "source": "curated",
+                    "opinion_author": u["opinion_author"], "decided_on": str(u["decided_on"]) if u["decided_on"] else None,
+                    "reporter_citations": u["reporter_citations"], "statutes_cited": u["statutes_cited"],
+                    "topics": u["topics"], "scores": {}})
+        if status == "repealed":
+            out[-1]["replaced_by"] = [m["new"] for m in succ.get(uid, []) if m["new"]]
+    return out

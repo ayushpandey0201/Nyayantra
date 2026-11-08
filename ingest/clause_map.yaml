@@ -1,9 +1,12 @@
 # Contract clause types -> the provisions that govern them. Curated by hand; enrich.py writes these
 # into unit.clause_types and fails if any listed unit is missing from the database.
+# Order matters: contract review gives the model the first few entries of each type.
+# Judgment paragraphs may be listed where the Act alone would mislead (e.g. s.27 and covenants during service).
 # The labels match the contract-analysis test set (NON_COMPETE -> non_compete, etc.).
 
 non_compete:                 # restraint of trade
   - ICA-1872:s27
+  - SC-1967-GOLIKARI:p18       # restraints during the term are generally not s.27 restraints; after it, void
 penalty:                     # penalty / liquidated damages / forfeiture
   - ICA-1872:s74
   - ICA-1872:s73

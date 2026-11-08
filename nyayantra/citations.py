@@ -25,7 +25,8 @@ CASE_STOP = {"union", "india", "state", "states", "limited", "ltd", "company", "
              "services", "trading", "association", "organisation", "national", "electricity", "regulatory",
              "high", "court", "punjab", "haryana", "bihar", "karnataka", "maharashtra", "kerala", "consumer",
              "education", "research", "centre", "medical", "india)", "sons", "spinning", "manufacturing",
-             "architects", "aluminium", "between", "indian", "contract", "section", "supreme", "india's", "agreements", "arbitration", "interplay", "stamp", "district"}
+             "architects", "aluminium", "between", "singh", "kumar", "kumari", "sharma", "gupta", "verma", "reddy",
+             "mehta", "patel", "khanna", "agarwal", "jain", "rao", "iyer", "nair", "das", "ghosh", "bose", "indian", "contract", "section", "supreme", "india's", "agreements", "arbitration", "interplay", "stamp", "district"}
 
 
 @dataclass

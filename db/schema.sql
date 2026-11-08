@@ -144,6 +144,16 @@ create table if not exists embed_cache (
     primary key (sha256, embedding_model)
 );
 
+-- Every LLM response, keyed by a hash of (provider, model, messages, parameters); replayed on re-runs.
+create table if not exists llm_cache (
+    cache_key   text primary key,
+    provider    text not null,
+    model       text not null,
+    request     jsonb not null,
+    response    jsonb not null,
+    created_at  timestamptz not null default now()
+);
+
 -- Repealed or renumbered provision -> its replacement (e.g. IPC s.420 -> BNS s.318(4)).
 create table mapping (
     mapping_id   bigserial primary key,
