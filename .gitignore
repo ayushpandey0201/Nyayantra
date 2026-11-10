@@ -28,3 +28,7 @@ results/
 data/raw/
 data/processed/
 models/
+
+# Test coverage data
+.coverage
+htmlcov/

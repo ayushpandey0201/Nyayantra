@@ -70,17 +70,19 @@ def redact(text: str, extra: dict[str, list[str]] | None = None) -> Redaction:
     seen: dict[str, str] = {}
 
     def place(label: str, value: str) -> str:
-        if value in seen:
-            return seen[value]
+        key = re.sub(r"\s+", " ", value).lower()      # the same name across a line break is the same party
+        if key in seen:
+            return seen[key]
         counts[label] = counts.get(label, 0) + 1
         ph = f"[{label}_{counts[label]}]"
-        seen[value], mapping[ph] = ph, value
+        seen[key], mapping[ph] = ph, value
         return ph
 
     for label, values in (extra or {}).items():
         for v in sorted(set(values), key=len, reverse=True):
             if v.strip():
-                out = re.sub(re.escape(v), lambda m: place(label, m.group()), out, flags=re.I)
+                pat = r"\s+".join(re.escape(w) for w in v.split())
+                out = re.sub(rf"(?<!\w){pat}(?!\w)", lambda m: place(label, m.group()), out, flags=re.I)
     def sub(label, valid):
         def f(m):
             g = "v" if "v" in m.re.groupindex else 0

@@ -101,3 +101,9 @@
 - {id: T01, kind: asof, as_of: 2020-06-30, q: "Under which provision was cheating punishable in 2020?", gold: [[IPC-1860:s417, IPC-1860:s420, IPC-1860:s415]]}
 - {id: T02, kind: asof, as_of: 2022-12-31, q: "What was the punishment for murder at the end of 2022?", gold: [[IPC-1860:s302]]}
 - {id: T03, kind: asof, as_of: 2023-06-01, q: "Did a contract clause requiring payment of a fixed sum on breach need proof of actual loss, as of mid-2023?", gold: [[ICA-1872:s74], ["SC-2015-KAILASH-NATH:*", "SC-1963-FATEH-CHAND:*", "SC-2003-SAW-PIPES:*", "SC-1969-MAULA-BUX:*"]]}
+
+# client-framed: a lawyer's question about a client's facts (as it reads after redaction removes the personal data)
+- {id: K01, kind: client, q: "My client signed an employment contract saying she cannot join any competitor for two years after she resigns. Can the company stop her?", gold: [[ICA-1872:s27]]}
+- {id: K02, kind: client, q: "We are a vendor and the buyer's contract makes us pay Rs 1 lakh for every day of delay no matter the actual loss. Will a court enforce the full amount?", gold: [[ICA-1872:s74]]}
+- {id: K03, kind: client, q: "My client's employer is sharing his personal data with marketing partners without asking him. What does the law require?", gold: [[DPDPA-2023:s4, DPDPA-2023:s5, DPDPA-2023:s6]]}
+- {id: K04, kind: client, q: "My client lost Rs 5 lakh to a fake investment scheme last month. Under which provision can he file a complaint?", gold: [[BNS-2023:s318]]}

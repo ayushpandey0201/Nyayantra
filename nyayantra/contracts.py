@@ -25,7 +25,7 @@ from nyayantra.retrieve import Filters, Options, fetch, retrieve
 from nyayantra.screen import screen
 
 CLAUSE_START = re.compile(r"^\s*(?:(?:clause|article|section)\s+)?(\d{1,2}(?:\.\d{1,2}){0,2})[.)]?\s+(?=\S)", re.I | re.M)
-PARTY_DEF = re.compile(r"([A-Z][\w&.,'’ -]{2,120}?)\s*\((?:hereinafter[^)\"“]*|the\s+)?[\"“]([A-Z][\w ]{1,30})[\"”]\)")
+PARTY_DEF = re.compile(r"([A-Z][\w&./,'’ -]{2,120}?)\s*\((?:hereinafter[^)\"“]*|the\s+)?[\"“]([A-Z][\w ]{1,30})[\"”]\)")
 BATCH = 4
 LAW_PER_CLAUSE = 3
 
@@ -44,15 +44,25 @@ def split_clauses(text: str) -> list[dict]:
     return [{"clause_id": str(i + 1), "text": re.sub(r"\s+", " ", p)} for i, p in enumerate(paras)]
 
 
+RELATIVE = re.compile(r"\b(?:son|daughter|wife|husband)\s+of\s+|\b[SDW]/[Oo]\.?\s+")
+PERSON = re.compile(r"(?:(?:Mr|Mrs|Ms|Shri|Smt|Sri|Dr)\.?\s+)?[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,3}")
+
+
 def parties(text: str) -> list[str]:
-    """Party names defined in the contract ('Acme Infotech Pvt Ltd (the "Company")'), to redact."""
-    names = []
+    """Names to redact from a contract: the defined parties ('Acme Infotech Pvt Ltd (the "Company")') and
+    relatives named to identify an individual party ('son of Suresh Mehta', 'S/o ...')."""
+    text = re.sub(r"\s+", " ", text)      # a party description often runs across a line break
+    names, relatives = [], []
+    for m in RELATIVE.finditer(text):
+        p = PERSON.match(text, m.end())
+        if p:
+            relatives.append(p.group(0))
     for m in PARTY_DEF.finditer(text):
-        name = re.sub(r"^.*?\b(?:between|and|with)\s+(?=[A-Z])", "", m.group(1).strip(" ,"))
-        name = re.split(r",\s+(?:a|an|having|incorporated|registered|through|represented|residing|son|daughter|wife)\b", name)[0].strip(" ,")
+        name = re.sub(r"^.*?\b(?i:between|and|with)\s+(?=[A-Z])", "", m.group(1).strip(" ,"))
+        name = re.split(r",\s+(?:a|an|having|incorporated|registered|through|represented|residing|son|daughter|wife|husband)\b|,?\s+[SDW]/[Oo]\b", name)[0].strip(" ,")
         if len(name) > 3 and not name.lower().startswith(("the ", "this ")):
             names.append(name)
-    return names
+    return list(dict.fromkeys(names + relatives))
 
 
 @lru_cache(maxsize=1)
@@ -167,7 +177,9 @@ def analyze(text: str, use_policy_model: bool = True) -> dict:
         report.append(item)
     policy = None
     if use_policy_model:
-        flagged_text = "\n".join(f"{r['clause_id']}: {r['issue']}" for r in report if r["risk"] != "none")
+        # built from the model's redacted findings: the report itself has the real names restored
+        flagged_text = "\n".join(f"{r['clause_id']}: {results.get(r['clause_id'], {}).get('issue', '')}"
+                                 for r in report if r["risk"] != "none")
         if flagged_text:
             try:
                 pc = llm.chat("safeguard", prompts.POLICY_SYSTEM, prompts.policy_user("Review of a contract", flagged_text),

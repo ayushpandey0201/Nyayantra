@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime as dt
 import hashlib
+import re
 import time
 import uuid
 
@@ -15,13 +16,23 @@ from nyayantra import llm
 from nyayantra.generate import generate
 from nyayantra.guardrail import guardrail
 from nyayantra.redact import redact
-from nyayantra.retrieve import Filters, Options, retrieve
+from nyayantra.retrieve import Filters, Options, fetch, retrieve
 from nyayantra.screen import screen
 from nyayantra.understand import understand
 
 DISCLAIMER = ("Research aid for advocates, generated from the cited sources. It is not legal advice "
               "(Advocates Act 1961, ss. 29 and 33); verify against the official text before relying on it.")
 CONTEXT_K = 5
+# "PAN [PAN_1]", "Aadhaar [AADHAAR_1]", "(+91 [PHONE_1])": the placeholders and their labels say nothing about the
+# law, and words like "Aadhaar" pull in unrelated judgments, so they are removed from the search query only
+PLACEHOLDER = re.compile(r"(?:\b(?:e-?mail|phone|mobile|tel|PAN|Aadhaar|a/c|account|IFSC|GSTIN|passport|voter id|card)"
+                         r"(?:\s+(?:no\.?|number|id))?\s*[:#]?\s*)?(?:\+91\s*)?\[[A-Z_]+_\d+\]", re.I)
+
+
+def search_text(q: str) -> str:
+    q = PLACEHOLDER.sub("", q)
+    q = re.sub(r"\(\s*(?:[,;]\s*)*\)", "", q)           # brackets left empty
+    return re.sub(r"\s+([,.;?])", r"\1", re.sub(r"\s{2,}", " ", q)).strip()
 
 
 def _stage(trace: list, name: str, t0: float, out: dict) -> dict:
@@ -80,7 +91,7 @@ def research(question: str, as_of: dt.date | None = None, mode: str = "accurate"
 
     # 4. retrieve
     t0 = time.perf_counter()
-    ret = retrieve(und["search_query"], Filters(as_of=eff_as_of), Options(k=CONTEXT_K, rerank=(mode == "accurate")))
+    ret = retrieve(search_text(und["search_query"]), Filters(as_of=eff_as_of), Options(k=CONTEXT_K, rerank=(mode == "accurate")))
     hits = ret["hits"]
     successors: dict[str, list[str]] = {}
     for h in hits:
@@ -88,7 +99,9 @@ def research(question: str, as_of: dt.date | None = None, mode: str = "accurate"
             successors.setdefault(h["via"]["replaces"], []).append(h["unit_id"])
     for h in hits:
         if h["status"] == "repealed":
-            h["replaced_by"] = successors.get(h["unit_id"], [])
+            # successors in the context first; otherwise the mapping table, so a caveat never says "no successor" wrongly
+            h["replaced_by"] = successors.get(h["unit_id"]) or h.get("replaced_by") or \
+                next((f.get("replaced_by", []) for f in fetch([h["unit_id"]], eff_as_of)), [])
     _stage(trace, "retrieve", t0, {"output": {"hits": [_hit_view(h) for h in hits], "trace": ret["trace"]},
                                    "controls": ["Duty of competence: current law only, as of the stated date",
                                                 "Repealed provisions replaced by their mapped successors (IPC -> BNS)",
@@ -130,8 +143,13 @@ def research(question: str, as_of: dt.date | None = None, mode: str = "accurate"
         # text, points and caveats were normalised by the guardrail (ASCII brackets and hyphens)
         answer = {"text": red.restore(p.get("answer", "")), "points": p.get("points", []),
                   "caveats": list(p.get("caveats", [])) + gr["added_caveats"], "insufficient": p.get("insufficient", False)}
+    if decision == "pass" and scr["model_error"]:
+        # the rules passed but Prompt Guard could not be asked: show the answer, but an advocate checks it
+        decision = "review"
+        gr["failed"] = gr["failed"] + ["injection_classifier_unavailable"]
     reason = {"withhold": "The draft failed the citation checks, so it is not shown. The retrieved sources are listed; an advocate should review.",
-              "review": "Shown with a warning and queued for advocate review: " + ", ".join(gr["failed"]),
+              "review": "Shown with a warning and queued for advocate review: " + ", ".join(
+                  "injection classifier unavailable" if f == "injection_classifier_unavailable" else f for f in gr["failed"]),
               "insufficient": "The sources do not answer this question."}.get(decision)
     return _finish(result, trace, t_all, decision=decision, answer=answer, hits=hits, reason=reason)
 

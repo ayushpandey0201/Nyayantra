@@ -38,10 +38,13 @@ Stored results are redacted. The audit log keeps ids and hashes only, and the da
 ## Tests and evaluation
 
 ```bash
-.venv/bin/python -m pytest -q tests                 # no network; the store tests use a separate nyayantra_test database
-.venv/bin/python -m eval.retrieval_eval             # recall@5 on 74 gold questions
+.venv/bin/python -m pytest -q tests --cov=nyayantra # offline: 156 tests; a scripted provider stands in for Groq/Gemini
+NYAYANTRA_LIVE=1 .venv/bin/python -m pytest -q tests/test_live.py   # 9 live tests against Groq and Gemini
+.venv/bin/python -m eval.retrieval_eval             # recall@5 on 78 gold questions
 .venv/bin/python -m eval.answers_smoke              # live: 8 questions, 10 invented-citation traps, 2 foreign-law
 .venv/bin/python -m eval.clauses_eval               # live: 24 labelled synthetic clauses plus an injection
 ```
 
 See `docs/PLAN.md` for the design and `docs/PROJECT_BRIEF.md` for the brief.
+
+The offline tests need the local database but no network: `tests/conftest.py` replaces only the HTTP call, so the real routing, fallback, cache and trace code runs, and every request body that would have been sent can be inspected. The store tests use a separate `nyayantra_test` database, so the real audit chain is never touched.
