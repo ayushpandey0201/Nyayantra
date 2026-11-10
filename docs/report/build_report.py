@@ -99,7 +99,7 @@ class Doc:
     def H1(s, a, b):
         s.ch = int(a.split()[1]); s.t = s.f = 0; s.heads.append((a.split()[1], b, 1))
         s.add(parse_xml(f'<w:p xmlns:w="{W}"><w:pPr><w:pStyle w:val="Heading1"/><w:pageBreakBefore/><w:spacing w:after="360"/><w:jc w:val="center"/></w:pPr>'
-                        + run(a, 36) + f'<w:r><w:rPr>{RF}<w:sz w:val="44"/><w:szCs w:val="44"/></w:rPr><w:br/><w:t xml:space="preserve">{esc(b)}</w:t></w:r></w:p>'))
+                        + run(a, 32) + f'<w:r><w:rPr>{RF}<w:sz w:val="40"/><w:szCs w:val="40"/></w:rPr><w:br/><w:t xml:space="preserve">{esc(b)}</w:t></w:r></w:p>'))
 
     def H2(s, t):
         s.heads.append((t.split()[0], t.split(" ", 1)[1], 2))
@@ -203,11 +203,12 @@ for start, new in content.ABSTRACT:
     settext(start, new)
 
 
-def clone_rows(tbl, rows, hdr=1):
+def clone_rows(tbl, rows, hdr=1, bold=None):
+    """bold: per-row True/False to set the title cell's weight (the template bolds every row)."""
     tr = tbl.findall(qn("w:tr")); proto = tr[hdr]
     for x in tr[hdr:]:
         tbl.remove(x)
-    for vals in rows:
+    for k, vals in enumerate(rows):
         n = copy.deepcopy(proto); cells = n.findall(qn("w:tc"))
         for c, v in zip(cells, vals):
             ts = list(c.iter(qn("w:t")))
@@ -215,15 +216,174 @@ def clone_rows(tbl, rows, hdr=1):
                 ts[0].text = str(v)
                 for t in ts[1:]:
                     t.text = ""
+        if bold is not None:
+            for rpr in n.iter(qn("w:rPr")):
+                for e in rpr.findall(qn("w:b")) + rpr.findall(qn("w:bCs")):
+                    rpr.remove(e)
+            if bold[k]:
+                for rpr in cells[1].iter(qn("w:rPr")):
+                    rpr.insert(1, parse_xml(f'<w:b xmlns:w="{W}"/>'))
         tbl.append(n)
+
+
+def roman(n):
+    if not isinstance(n, int) or n < 1:
+        return ""
+    out = ""
+    for v, r in ((10, "x"), (9, "ix"), (5, "v"), (4, "iv"), (1, "i")):
+        while n >= v:
+            out += r; n -= v
+    return out
 
 
 pg = lambda k: PAGES.get(k, "")  # noqa: E731
 FP = PAGES.get("_front", {})
-clone_rows(ti[3], [[n, FP.get(n, "")] for n in ("ABSTRACT", "DECLARATION", "ACKNOWLEDGEMENTS", "LIST OF TABLES", "LIST OF FIGURES")])
-clone_rows(ti[4], [[a, b, pg(a)] for a, b, l in D.heads] + [["", "References", pg("REFERENCES")]])
+clone_rows(ti[3], [[n, roman(FP.get(n, ""))] for n in ("ABSTRACT", "DECLARATION", "ACKNOWLEDGEMENTS", "LIST OF TABLES", "LIST OF FIGURES")])
+clone_rows(ti[4], [[a, b, pg(a)] for a, b, l in D.heads] + [["", "REFERENCES", pg("REFERENCES")]],
+           bold=[l == 1 for a, b, l in D.heads] + [True])
 clone_rows(ti[5], [[a, b, pg(a)] for a, b in D.tables])
 clone_rows(ti[6], [[a, b, pg(a)] for a, b in D.figs])
+
+# ---------- page template: cover, certificate, front matter, footers (as in the department's sample report) ----------
+def _set_text(p_el, text, sz=None, bold=None, italic=None):
+    rs = p_el.findall(qn("w:r"))
+    ts = [t for r in rs for t in r.findall(qn("w:t"))]
+    ts[0].text = text
+    for t in ts[1:]:
+        t.text = ""
+    for r in rs:
+        rpr = r.find(qn("w:rPr"))
+        if rpr is None:
+            continue
+        if sz:
+            for z in rpr.iter(qn("w:sz"), qn("w:szCs")):
+                z.set(qn("w:val"), str(sz))
+        for flag, tags in ((bold, ("w:b", "w:bCs")), (italic, ("w:i", "w:iCs"))):
+            if flag is None:
+                continue
+            for tg in tags:
+                for e in rpr.findall(qn(tg)):
+                    rpr.remove(e)
+            if flag:
+                for tg in reversed(tags):
+                    rpr.insert(1, parse_xml(f'<w:{tg.split(":")[1]} xmlns:w="{W}"/>'))
+
+
+def _space(p_el, before=None, after=None, line=None, first=None):
+    ppr = p_el.find(qn("w:pPr"))
+    if ppr is None:
+        ppr = parse_xml(f'<w:pPr xmlns:w="{W}"/>'); p_el.insert(0, ppr)
+    sp = ppr.find(qn("w:spacing"))
+    if sp is None:
+        sp = parse_xml(f'<w:spacing xmlns:w="{W}"/>'); ppr.append(sp)
+    for k, v in (("before", before), ("after", after), ("line", line)):
+        if v is not None:
+            sp.set(qn(f"w:{k}"), str(v))
+    if first is not None:
+        ind = ppr.find(qn("w:ind"))
+        if ind is None:
+            ind = parse_xml(f'<w:ind xmlns:w="{W}"/>'); ppr.append(ind)
+        ind.set(qn("w:firstLine"), str(first))
+
+
+def _paras(el):
+    return [(p, "".join(t.text or "" for t in p.iter(qn("w:t")))) for p in el.iter(qn("w:p"))]
+
+
+FOOTER = (f'<w:p xmlns:w="{W}"><w:pPr><w:tabs><w:tab w:val="center" w:pos="4333"/><w:tab w:val="right" w:pos="8666"/></w:tabs>'
+          f'<w:spacing w:after="0"/></w:pPr>' + run("Dept. of AI & DS, BMSCE", 24) + '<w:r><w:tab/></w:r>' + run("2026-27", 24)
+          + '<w:r><w:tab/></w:r>' + '<w:r><w:rPr>' + RF + '<w:sz w:val="24"/></w:rPr><w:fldChar w:fldCharType="begin"/></w:r>'
+          + '<w:r><w:rPr>' + RF + '<w:sz w:val="24"/></w:rPr><w:instrText xml:space="preserve"> PAGE </w:instrText></w:r>'
+          + '<w:r><w:rPr>' + RF + '<w:sz w:val="24"/></w:rPr><w:fldChar w:fldCharType="separate"/></w:r>' + run("1", 24)
+          + '<w:r><w:rPr>' + RF + '<w:sz w:val="24"/></w:rPr><w:fldChar w:fldCharType="end"/></w:r></w:p>')
+
+
+COVER_SPACER, CERT_SPACER = 1300, 800     # twips; tuned so each bordered box fills one A4 page
+
+
+def template_pass():
+    # cover and certificate: the double-line box fills the page, content spread over it
+    # the last (empty) row of each box is a spacer; its height makes the box reach the foot of the page
+    for tbl, h in ((ti[0], COVER_SPACER), (ti[1], CERT_SPACER)):
+        for trh in tbl.iter(qn("w:trHeight")):
+            trh.set(qn("w:val"), str(h)); trh.set(qn("w:hRule"), "exact")
+        for trpr in tbl.iter(qn("w:trPr")):
+            if trpr.find(qn("w:cantSplit")) is None:
+                trpr.insert(0, parse_xml(f'<w:cantSplit xmlns:w="{W}"/>'))
+    # the paragraphs that carry the cover and certificate section breaks take no height, so the box keeps one page
+    for e in kids[:35]:
+        if e.tag == qn("w:p") and e.find(qn("w:pPr")) is not None and e.find(qn("w:pPr")).find(qn("w:sectPr")) is not None:
+            sp = e.find(qn("w:pPr")).find(qn("w:spacing"))
+            if sp is None:
+                sp = parse_xml(f'<w:spacing xmlns:w="{W}"/>'); e.find(qn("w:pPr")).insert(0, sp)
+            for k, v in (("before", "0"), ("after", "0"), ("line", "20"), ("lineRule", "exact")):
+                sp.set(qn(f"w:{k}"), v)
+    cover = dict((t[:40], p) for p, t in _paras(ti[0]) if t)
+    for key, (text, sz, b, it) in {
+            "AAT REPORT (26AI7PELLM) ON": ("HYBRID INTELLIGENCE AND LARGE LANGUAGE MODELS (26AI7PELLM)", 28, True, False),
+            "HYBRID INTELLIGENCE AND LARGE LANGUAGE MO": ("AAT REPORT ON", 24, False, False),
+            "Submitted in partial fulfilment of the c": ("Submitted in Partial fulfilment for the VII Semester, B.E in Artificial Intelligence & Data Science", 24, True, True)}.items():
+        _set_text(cover[key[:40]], text, sz, b, it)
+    for p, t in _paras(ti[0]):
+        if TITLE[:30] in t:
+            _set_text(p, t, 36, True); _space(p, before=200, after=400)
+        elif t.startswith("VISVESVARAYA"):
+            _space(p, before=480)
+        elif t.startswith("HYBRID INTELLIGENCE AND LARGE LANGUAGE MODELS (2"):
+            _space(p, before=480, after=240)
+        elif t.startswith("Submitted by"):
+            _space(p, before=600)
+        elif t.startswith("Under the Guidance"):
+            _space(p, before=360)
+        elif t.startswith("2026-2027"):
+            _space(p, before=480)
+        elif t.startswith("B.M.S. College of Engineering"):
+            _space(p, before=600)
+    for p, t in _paras(ti[1]):
+        if t.startswith("B.M.S. College of Engineering"):
+            _space(p, before=480)
+        elif t.startswith("CERTIFICATE"):
+            _space(p, before=240, after=360)
+        elif t.startswith("Certified that"):
+            _space(p, line=360, after=300)
+        elif t.startswith("Principal") or t.startswith("External Viva"):
+            _space(p, before=360)
+    # abstract double spaced, declaration and acknowledgement at 1.5, as in the sample
+    front = [e for e in kids[:35] if e.tag == qn("w:p")]
+    zone = None
+    for e in front:
+        t = "".join(x.text or "" for x in e.iter(qn("w:t"))).strip()
+        if t in ("ABSTRACT", "DECLARATION", "ACKNOWLEDGEMENT", "TABLE OF CONTENTS"):
+            zone = t; continue
+        if not t:
+            continue
+        if zone == "ABSTRACT":
+            _space(e, line=360, after=160, first=720)
+        elif zone in ("DECLARATION", "ACKNOWLEDGEMENT") and len(t) > 60:
+            _space(e, line=360, after=160, first=720)
+    # list of figures on the same page as the list of tables
+    for e in front:
+        t = "".join(x.text or "" for x in e.iter(qn("w:t"))).strip()
+        if t == "LIST OF FIGURES":
+            ppr = e.find(qn("w:pPr"))
+            for pb in ppr.findall(qn("w:pageBreakBefore")):
+                ppr.remove(pb)
+            _space(e, before=360)
+    # an explicit line rule, so every renderer (Word, Pages, Google Docs) applies the 1.5 and double spacing
+    for sp in body.iter(qn("w:spacing")):
+        if sp.get(qn("w:line")) and not sp.get(qn("w:lineRule")):
+            sp.set(qn("w:lineRule"), "auto")
+    # footers: none on the cover and certificate; "Dept | year | page" from the abstract, roman then arabic
+    secs = d.sections
+    for k in (2, 3):
+        ftr = secs[k].footer._element
+        for ch in list(ftr):
+            ftr.remove(ch)
+        ftr.append(parse_xml(FOOTER))
+    for k, fmt in ((2, "lowerRoman"), (3, "decimal")):
+        pn = secs[k]._sectPr.find(qn("w:pgNumType"))
+        pn.set(qn("w:fmt"), fmt); pn.set(qn("w:start"), "1")
+
 
 # ---------- body ----------
 for e in kids[35:]:
@@ -237,6 +397,7 @@ final.addprevious(parse_xml(f'<w:p xmlns:w="{W}"><w:pPr><w:pStyle w:val="Heading
 for i, k in enumerate(order, 1):
     final.addprevious(para('<w:tabs><w:tab w:val="left" w:pos="640"/></w:tabs><w:spacing w:after="120" w:line="276"/><w:ind w:left="640" w:hanging="640"/>',
                            run(f"[{i}]\t" + R[k]).replace("\t", '</w:t><w:tab/><w:t xml:space="preserve">')))
+template_pass()
 d.core_properties.title = "Nyayantra: LLMs for Legal Research and Contract Analysis"
 d.core_properties.author = "Ayush Pandey, Sharanya Sandur"
 d.core_properties.subject = "AAT Report 26AI7PELLM"
