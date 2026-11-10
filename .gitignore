@@ -32,3 +32,6 @@ models/
 # Test coverage data
 .coverage
 htmlcov/
+
+# app.sh runtime (pid, log)
+.run/

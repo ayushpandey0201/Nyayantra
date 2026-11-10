@@ -6,10 +6,19 @@ It is a research aid for advocates, not legal advice (Advocates Act 1961, ss. 29
 
 ## Run
 
+Everything goes through `./app.sh`:
+
 ```bash
-cp .env.example .env        # fill in GROQ_API_KEY (and GEMINI_API_KEY for public fallback), plus two service keys
-.venv/bin/uvicorn nyayantra.api:app --port 8010
+./app.sh setup     # first time: virtualenv, packages, .env with service keys, database
+./app.sh           # start the API on port 8010 and open the console
+./app.sh keys user # copy a key to the clipboard for the console (keys are never printed)
+./app.sh demo      # walk through every endpoint and the control it applies
+./app.sh test      # 162 offline tests with coverage   (./app.sh test --live for Groq and Gemini)
+./app.sh docs      # rebuild the slides and the report
+./app.sh stop
 ```
+
+Add `GROQ_API_KEY` (and `GEMINI_API_KEY` for the public fallback) to `.env` after setup. Under the hood the server is `.venv/bin/uvicorn nyayantra.api:app --port 8010`.
 
 Open `http://127.0.0.1:8010/console` for the test console, or `http://127.0.0.1:8010/docs` for the OpenAPI page. In the console, paste `NYAYANTRA_API_KEY` (users) and `NYAYANTRA_REVIEWER_KEY` (advocates) from `.env`. Only the reviewer key can decide reviews, read the audit log and erase records.
 
