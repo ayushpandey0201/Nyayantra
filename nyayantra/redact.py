@@ -40,7 +40,7 @@ RULES: list[tuple[str, re.Pattern, object]] = [
     ("IFSC", re.compile(r"\b[A-Z]{4}0[A-Z0-9]{6}\b"), None),
     ("BANK_ACCOUNT", re.compile(r"(?i)\b(?:a/c|account|acct)\.?(?:\s*(?:no\.?|number))?[\s:.#-]{1,3}(?P<v>\d{9,18})\b"), None),
     ("CARD", re.compile(r"(?<!\d)(?:\d{4}[ -]){3}\d{4}(?!\d)"), None),
-    ("PHONE", re.compile(r"(?<![\d(])(?:\+91[ -]?|0)?[6-9]\d{4}[ -]?\d{5}(?![\d)])"), None),
+    ("PHONE", re.compile(r"(?<!\d)(?:\+91[ -]?|0)?[6-9]\d{4}[ -]?\d{5}(?!\d)"), None),
     ("PASSPORT", re.compile(r"\b[A-PR-WY][1-9]\d\s?\d{4}[1-9]\b"), None),
     ("VOTER_ID", re.compile(r"\b[A-Z]{3}\d{7}\b"), None),
 ]

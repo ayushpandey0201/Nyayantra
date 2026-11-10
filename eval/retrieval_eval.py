@@ -4,7 +4,7 @@
   python -m eval.retrieval_eval --only full --show-misses
 
 Writes eval/results/retrieval.json (every question, every configuration) and retrieval.md (tables).
-No LLM is involved; everything runs locally.
+No LLM is involved, except in full+rewrite (gpt-oss-20b on Groq restates each question; replies cached).
 """
 from __future__ import annotations
 
@@ -19,6 +19,7 @@ import psycopg
 import yaml
 
 from nyayantra.config import DSN
+from nyayantra.pipeline import rewrite_query
 from nyayantra.retrieve import Filters, Options, retrieve
 
 HERE = Path(__file__).resolve().parent
@@ -32,6 +33,8 @@ CONFIGS = {
     "hybrid+legal":  Options(k=K, rerank=False),
     "dense+rerank":  Options(k=K, retrievers=("dense",), rerank=True, legal_status=False, pin_citations=False, diversity=False),
     "full":          Options(k=K),
+    "full+rewrite":  Options(k=K),    # the question first restated in legal terms by gpt-oss-20b (pipeline.rewrite_query)
+    "full+both":     Options(k=K),    # the question followed by its legal-terms restatement
 }
 
 
@@ -84,7 +87,9 @@ def main() -> None:
             as_of = q.get("as_of")
             f = Filters(as_of=dt.date.fromisoformat(str(as_of)) if as_of else None)
             t0 = time.perf_counter()
-            r = retrieve(q["q"], f, opts)
+            text = (rewrite_query(q["q"], "public")[0] if name.endswith("+rewrite") else
+                    q["q"] + "\n" + rewrite_query(q["q"], "public")[0] if name.endswith("+both") else q["q"])
+            r = retrieve(text, f, opts)
             ms = (time.perf_counter() - t0) * 1000
             s = score(r["hits"], q["gold"])
             rows.append({"id": q["id"], "kind": q["kind"], "ms": round(ms, 1), **s,

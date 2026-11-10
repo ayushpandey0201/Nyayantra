@@ -184,8 +184,21 @@ def test_cache_hit_sends_nothing(monkeypatch, fake_llm):
 
 
 @pytest.mark.parametrize("text, ok", [
-    ('{"a": 1}', True), ('Here you go:\n```json\n{"a": 1}\n```', True), ("[1, 2]", False), ("not json", False),
+    ('{"a": 1}', True), ('Here you go:\n```json\n{"a": 1}\n```', True), ("[1, 2]", False), ('[\n{"a": 1}]', True), ("not json", False),
     ("", False), (None, False), ('{"a": 1', False),
 ])
 def test_parse_json(text, ok):
     assert (llm.parse_json(text) is not None) is ok
+
+
+def test_invalid_json_reply_retried_without_json_mode(fake_llm):
+    seen = []
+
+    def post(provider, body):
+        seen.append("response_format" in body)
+        if "response_format" in body:
+            raise llm.LLMError("groq http 400: Failed to validate JSON. Please adjust your prompt.", status=400)
+        return {"choices": [{"message": {"content": 'Sure: {"a": 1}'}, "finish_reason": "stop"}], "usage": {}}, 200, 5.0
+    llm._post = post
+    r = llm.chat("helper", "s", "u", stage="t", sensitivity="confidential")
+    assert seen == [True, False] and llm.parse_json(r["raw"]) == {"a": 1} and r["json_mode_dropped"]

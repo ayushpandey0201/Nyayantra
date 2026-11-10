@@ -222,7 +222,17 @@ def chat(role: str, system: str | None, user: str, *, stage: str, sensitivity: s
             raise LLMUnavailable(f"{stage}: request too large for {model}", 413)
         rec["throttled_s"] = round(_throttle(model, need), 1) if prov == "groq" else 0.0
         try:
-            data, status, ms = _post(prov, body)
+            try:
+                data, status, ms = _post(prov, body)
+            except LLMError as e:
+                # Groq refuses a json_object reply that is not valid JSON (HTTP 400). Ask once more without
+                # JSON mode and let parse_json() read the reply; the caller's schema checks still apply.
+                if not (e.status == 400 and "validate json" in str(e).lower() and "response_format" in body):
+                    raise
+                body = {k: v for k, v in body.items() if k != "response_format"}
+                key = _cache_key(prov, body)
+                rec["params"], rec["cache_key"], rec["json_mode_dropped"] = {k: v for k, v in body.items() if k != "messages"}, key, True
+                data, status, ms = _post(prov, body)
         except LLMError as e:
             _breakers[prov].record(False)
             errors.append(str(e))
@@ -254,6 +264,8 @@ def parse_json(text: str | None) -> dict | None:
             continue
         try:
             v = json.loads(candidate)
+            if isinstance(v, list) and len(v) == 1:      # the object wrapped in a one-item list
+                v = v[0]
             return v if isinstance(v, dict) else None
         except json.JSONDecodeError:
             continue

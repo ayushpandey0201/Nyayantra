@@ -209,3 +209,8 @@ def test_changed_word_in_quote_rejected():
 
 def test_ocr_repair_in_quote_tolerated():
     assert quote_found("shall be valid unless it is in writlng signed by the assignor", ASSIGN) == 1.0
+
+
+def test_phone_inside_brackets_redacted():
+    r = redact("(priya.s@example.in, +91 98860 11223) and (2017) 10 SCC 1")
+    assert "98860" not in r.text and "(2017) 10 SCC 1" in r.text
