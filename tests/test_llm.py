@@ -202,3 +202,23 @@ def test_invalid_json_reply_retried_without_json_mode(fake_llm):
     llm._post = post
     r = llm.chat("helper", "s", "u", stage="t", sensitivity="confidential")
     assert seen == [True, False] and llm.parse_json(r["raw"]) == {"a": 1} and r["json_mode_dropped"]
+
+
+def test_explicit_provider_is_honoured_even_without_fallback(fake_llm, monkeypatch):
+    monkeypatch.setattr(llm, "_disable_fallback", True)
+    r = llm.chat("main", "s", "u", stage="judge", sensitivity="public", provider="gemini")
+    assert r["provider"] == "gemini" and fake_llm.providers() == {"gemini"}
+
+
+def test_explicit_gemini_refused_for_confidential(fake_llm):
+    with pytest.raises(llm.LLMUnavailable):
+        llm.chat("main", "s", "u", stage="t", sensitivity="confidential", provider="gemini")
+    assert fake_llm.posts == []
+
+
+def test_no_fallback_keeps_public_on_groq(fake_llm, monkeypatch):
+    monkeypatch.setattr(llm, "_disable_fallback", True)
+    fake_llm.down["groq"] = llm.LLMError("groq http 503", status=503, retryable=True)
+    with pytest.raises(llm.LLMUnavailable):
+        llm.chat("main", "s", "u", stage="t", sensitivity="public")
+    assert fake_llm.providers() == {"groq"}

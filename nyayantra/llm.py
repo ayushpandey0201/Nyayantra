@@ -196,10 +196,16 @@ def chat(role: str, system: str | None, user: str, *, stage: str, sensitivity: s
          json_mode: bool = True, max_tokens: int = 1200, reasoning: str | None = "low",
          prompt_version: str | None = None, use_cache: bool = True, provider: str | None = None) -> dict:
     """Call the model for `role`. Returns the call record. Raises LLMUnavailable if no permitted provider answers."""
-    order = [provider] if provider else ["groq", "gemini"]
-    order = [p for p in order if p in MODELS[role]]
-    if sensitivity != "public" or _disable_fallback:
-        order = order[:1] if order[0] == "groq" else ["groq"]
+    if provider:
+        # an explicit provider is honoured exactly (never silently swapped), but confidential text never goes to Gemini
+        if sensitivity != "public" and provider != "groq":
+            raise LLMUnavailable(f"{stage}: a confidential request may not be sent to {provider}")
+        if provider not in MODELS[role]:
+            raise LLMUnavailable(f"{stage}: no {role} model configured on {provider}")
+        order = [provider]
+    else:
+        order = ["groq"] if sensitivity != "public" or _disable_fallback else ["groq", "gemini"]
+        order = [p for p in order if p in MODELS[role]]
     errors, fallback_from = [], None
     for prov in order:
         if not _breakers[prov].ok() and prov != order[-1]:

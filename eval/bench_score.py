@@ -188,6 +188,25 @@ def _reference(q: dict) -> str:
     return "\n\n".join(parts)
 
 
+JUDGE_GAP_S = 13      # Gemini free tier: about 5 requests a minute
+
+
+def _judge_call(system: str, user: str, stage: str, version: str, max_tokens: int) -> dict:
+    """One judge call on Gemini, paced, waiting out per-minute limits (3 tries) before giving up for the day."""
+    import time
+    for attempt in range(3):
+        try:
+            c = llm.chat("main", system, user, stage=stage, sensitivity="public", max_tokens=max_tokens, provider="gemini",
+                         prompt_version=version, reasoning="low")
+            if not c["cached"]:
+                time.sleep(JUDGE_GAP_S)
+            return c
+        except llm.LLMError as e:
+            if "429" not in str(e) or attempt == 2:
+                raise
+            time.sleep(65)
+
+
 def judge_all() -> None:
     qs = _questions()
     path = OUT / "judge.jsonl"
@@ -201,8 +220,7 @@ def judge_all() -> None:
             if q["kind"] == "trap":
                 user = f"<question>\n{q['q']}\n</question>\n<answer>\n{row['answer']}\n</answer>"
                 try:
-                    c = llm.chat("main", TRAP_SYSTEM, user, stage="judge_trap", sensitivity="public", max_tokens=400,
-                                 provider="gemini", prompt_version=TRAP_V, reasoning="low")
+                    c = _judge_call(TRAP_SYSTEM, user, "judge_trap", TRAP_V, 400)
                 except llm.LLMError as e:
                     print(f"judge stopped at {cfg} {row['id']}: {e}")
                     return
@@ -220,8 +238,7 @@ def judge_all() -> None:
             user = (f"<question>\n{q['q']}\n</question>\nLaw as of: {q.get('as_of') or '2026-11-10'}\n<reference_law>\n{_reference(q)}\n"
                     f"</reference_law>\n<answer>\n{ans}\n</answer>")
             try:
-                c = llm.chat("main", JUDGE_SYSTEM, user, stage="judge", sensitivity="public", max_tokens=600, provider="gemini",
-                             prompt_version=JUDGE_V, reasoning="low")
+                c = _judge_call(JUDGE_SYSTEM, user, "judge", JUDGE_V, 600)
             except llm.LLMError as e:
                 print(f"judge stopped at {cfg} {row['id']}: {e}")
                 return
