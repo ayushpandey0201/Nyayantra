@@ -12,3 +12,6 @@ pyarrow>=17
 pytest>=8
 python-dotenv>=1.0
 pytest-cov>=5
+python-pptx>=1.0  # slides (docs/deck)
+python-docx>=1.1  # report (docs/report)
+matplotlib>=3.9   # report figures

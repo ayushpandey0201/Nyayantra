@@ -48,3 +48,14 @@ NYAYANTRA_LIVE=1 .venv/bin/python -m pytest -q tests/test_live.py   # 9 live tes
 See `docs/DEMO.md` for a walkthrough of every endpoint and the control it applies, `docs/EVALUATION.md` for the results, `docs/PLAN.md` for the design and `docs/PROJECT_BRIEF.md` for the brief.
 
 The offline tests need the local database but no network: `tests/conftest.py` replaces only the HTTP call, so the real routing, fallback, cache and trace code runs, and every request body that would have been sent can be inspected. The store tests use a separate `nyayantra_test` database, so the real audit chain is never touched.
+
+## Slides and report
+
+`docs/Nyayantra_AAT_Presentation.pptx` (and `.pdf`) and `docs/Nyayantra_AAT_Report.docx` (and `.pdf`) are generated:
+
+```bash
+.venv/bin/python docs/deck/build_deck.py       # 29 slides on the BMSCE deck template
+.venv/bin/python docs/report/build_report.py   # report on the BMSCE report template
+```
+
+Both read their templates from `docs/reference/` (local only). Console screenshots in `docs/figures/console` were captured from the running console. For the report's contents page numbers, export the .docx to PDF (Pages or Word), run `docs/report/paginate.py <pdf>`, then build again.
