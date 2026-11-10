@@ -36,14 +36,18 @@ def reranker():
 
 
 def encode_query(text: str) -> tuple[list[float], dict[str, float]]:
-    out = embedder().encode([text], batch_size=1, max_length=512, return_dense=True, return_sparse=True,
-                            return_colbert_vecs=False)
+    model = embedder()
+    with _lock:   # one inference at a time on the GPU; API requests run in a thread pool
+        out = model.encode([text], batch_size=1, max_length=512, return_dense=True, return_sparse=True,
+                               return_colbert_vecs=False)
     return out["dense_vecs"][0].tolist(), {str(k): float(v) for k, v in out["lexical_weights"][0].items()}
 
 
 def rerank(query: str, passages: list[str]) -> list[float]:
     if not passages:
         return []
-    scores = reranker().compute_score([[query, p] for p in passages], batch_size=len(passages), max_length=RERANK_MAX_TOKENS,
-                                       normalize=True)
+    model = reranker()
+    with _lock:
+        scores = model.compute_score([[query, p] for p in passages], batch_size=len(passages), max_length=RERANK_MAX_TOKENS,
+                                     normalize=True)
     return [float(s) for s in (scores if isinstance(scores, list) else [scores])]

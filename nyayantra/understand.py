@@ -19,11 +19,27 @@ REPORTER = re.compile(r"\(\d{4}\)\s*\d+\s*SCC\s*(?:OnLine\s*\w+\s*)?\d+|\[\d{4}\
                       r"AIR\s*\d{4}\s*[A-Z][a-z]*\s*\d+|\d{4}\s*SCC\s*OnLine\s*\w+\s*\d+", re.I)
 
 
+def _split_joined(name: str) -> list[str]:
+    """'Percept D'Mark and Mehra Infotech v. Union of India' is two authorities, not one: the pattern allows
+    'and' inside a party name, so a real case named first would hide an invented one after it. Split when the
+    part before 'and' is a corpus case on its own and the part after it names a multi-word party."""
+    parts = re.split(r"\s+(?:v\.?|vs\.?|versus)\s+", name, maxsplit=1)
+    m = re.search(r"\s+(?:and|&)\s+(?=[A-Z])", parts[0]) if len(parts) == 2 else None
+    if not m:
+        return [name]
+    head, tail = parts[0][:m.start()], name[m.end():]
+    if len(re.findall(r"\b[A-Z][\w.'’-]*", parts[0][m.end():])) < 2:
+        return [name]
+    if citations.find(head).cases and not citations.find(tail).cases:
+        return [head, tail]
+    return [name]
+
+
 def _authorities(question: str, from_llm: list[str]) -> list[dict]:
     """Every authority the question names, each checked against the corpus."""
     found: list[str] = []
     for m in CASE_NAME.finditer(question):
-        found.append(m.group(0))
+        found += _split_joined(m.group(0))
     found += [m.group(0) for m in REPORTER.finditer(question)]
     for a in from_llm:
         if isinstance(a, str) and a.strip() and not any(a.strip() in f or f in a for f in found):

@@ -1,12 +1,13 @@
 -- Nyayantra schema. Three levels of legal metadata (instrument > unit > chunk),
 -- a verified map from repealed to replacement provisions, a citation index used by the
 -- guardrail, and the application tables (requests, reviews, audit log).
--- Safe to re-run: drops and recreates everything.
+-- Safe to re-run: drops and recreates the corpus. The application tables (requests, reviews,
+-- audit log) and the caches are kept, so reloading the law never breaks the audit chain.
 
 create extension if not exists vector;
 create extension if not exists pg_trgm;
 
-drop table if exists audit_log, review, request, citation_index, mapping, defined_term, chunk, unit, instrument cascade;
+drop table if exists citation_index, mapping, defined_term, chunk, unit, instrument cascade;
 drop type if exists instrument_kind, instrument_status, unit_kind, map_relation cascade;
 
 create type instrument_kind   as enum ('act', 'rules', 'regulation', 'judgment');
@@ -178,7 +179,7 @@ create unique index citation_uq on citation_index(form, coalesce(unit_id, ''), i
 create index citation_form_trgm on citation_index using gin(form gin_trgm_ops);
 
 -- Application tables.
-create table request (
+create table if not exists request (
     request_id      text primary key,
     kind            text not null,                   -- research / contract / citation_check
     created_at      timestamptz not null default now(),
@@ -189,7 +190,7 @@ create table request (
     retain_until    date
 );
 
-create table review (
+create table if not exists review (
     request_id   text primary key references request(request_id) on delete cascade,
     status       text not null default 'pending',   -- pending / approved / edited / rejected
     reviewer     text,
@@ -197,7 +198,7 @@ create table review (
     decided_at   timestamptz
 );
 
-create table audit_log (
+create table if not exists audit_log (
     seq        bigserial primary key,
     ts         timestamptz not null default now(),
     event      text not null,
@@ -205,3 +206,23 @@ create table audit_log (
     prev_hash  text not null,
     hash       text not null unique
 );
+-- Phase 6: request decisions, review queue details, erasure, and an append-only audit log.
+alter table request add column if not exists decision     text;
+alter table request add column if not exists sensitivity  text;
+alter table request add column if not exists cache_keys   text[];      -- LLM cache rows made for this request (erased with it)
+alter table request add column if not exists erased_at    timestamptz;
+create index if not exists request_created on request(created_at desc);
+
+alter table review add column if not exists queued_at  timestamptz not null default now();
+alter table review add column if not exists reason     text;           -- why the request needs an advocate
+alter table review add column if not exists edited     jsonb;          -- the advocate's corrected answer, if any
+create index if not exists review_status on review(status, queued_at);
+
+-- The audit log can only grow: updates and deletes are refused by the database itself.
+create or replace function audit_log_append_only() returns trigger language plpgsql as $$
+begin
+    raise exception 'audit_log is append-only';
+end $$;
+drop trigger if exists audit_log_no_change on audit_log;
+create trigger audit_log_no_change before update or delete on audit_log
+    for each row execute function audit_log_append_only();

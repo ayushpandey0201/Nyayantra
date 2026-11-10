@@ -212,7 +212,7 @@ def chat(role: str, system: str | None, user: str, *, stage: str, sensitivity: s
         rec = {"stage": stage, "role": role, "provider": prov, "model": model,
                "endpoint": f"{PROVIDERS[prov]['base']}/chat/completions", "prompt_version": prompt_version,
                "sensitivity": sensitivity, "system": system, "user": user, "params": {k: v for k, v in body.items() if k not in ("messages",)},
-               "fallback_from": fallback_from, "errors": list(errors)}
+               "fallback_from": fallback_from, "errors": list(errors), "cache_key": key}
         cached = _cache_get(key) if use_cache else None
         if cached:
             return {**rec, **cached, "cached": True, "latency_ms": 0.0}

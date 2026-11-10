@@ -1,5 +1,47 @@
 # Nyayantra
 
-A research assistant for Indian legal research and contract analysis, built with retrieval-augmented generation on Groq, with compliance controls at every stage of the pipeline.
+A research assistant for Indian legal research and contract analysis, built with retrieval-augmented generation on Groq, with compliance controls at every stage of the pipeline. Every pipeline stage is its own API route, and every response carries a trace with each stage's output, latency, the exact prompts sent, the raw model replies and the controls applied.
 
-Status: setting up. See `docs/PROJECT_BRIEF.md`.
+It is a research aid for advocates, not legal advice (Advocates Act 1961, ss. 29 and 33).
+
+## Run
+
+```bash
+cp .env.example .env        # fill in GROQ_API_KEY (and GEMINI_API_KEY for public fallback), plus two service keys
+.venv/bin/uvicorn nyayantra.api:app --port 8010
+```
+
+Open `http://127.0.0.1:8010/console` for the test console, or `http://127.0.0.1:8010/docs` for the OpenAPI page. In the console, paste `NYAYANTRA_API_KEY` (users) and `NYAYANTRA_REVIEWER_KEY` (advocates) from `.env`. Only the reviewer key can decide reviews, read the audit log and erase records.
+
+Requires PostgreSQL 17 with pgvector (`host=/tmp dbname=nyayantra`). Set up the schema with `db/schema.sql`, then `db/migrations/*.sql`. The local models (BGE-M3 and bge-reranker-v2-m3) load in the background when the server starts.
+
+## Routes
+
+| Stage | Route | What it does |
+|---|---|---|
+| 1 | `POST /v1/redact` | Removes personal data and party names; keeps legal citations |
+| 2 | `POST /v1/screen` | Injection screen: rules plus Llama Prompt Guard 2 |
+| 3 | `POST /v1/understand` | Language, as-of date and domains; checks every cited authority against the database |
+| 4 | `POST /v1/retrieve` | Hybrid search (dense, sparse, full-text, named case), reranking, legal status on the date |
+| 5 | `POST /v1/generate` | Answers only from passages fetched by id (gpt-oss-120b) |
+| 6 | `POST /v1/guardrail` | Fail-closed checks on a draft: withhold, review or pass |
+| flow | `POST /v1/research` | Stages 1–6, with one repair round |
+| flow | `POST /v1/contracts/analyze` | Clause review; confidential, so Groq only; always goes to an advocate |
+| flow | `POST /v1/citations/verify` | Checks every citation in a draft against the database (no model) |
+| review | `GET /v1/reviews`, `POST /v1/reviews/{id}/decision` | The advocate approves, corrects or rejects; one decision per request |
+| audit | `GET /v1/audit`, `GET /v1/audit/verify` | SHA-256 hash chain of requests, reviews and erasures |
+| erasure | `POST /v1/erase`, `POST /v1/retention/purge` | DPDP Act s.12: removes stored text, trace and LLM cache rows |
+| ops | `/health`, `/v1/compliance/map`, `/v1/sources`, `/v1/units/{id}`, `/v1/requests` | Status, control map, corpus |
+
+Stored results are redacted. The audit log keeps ids and hashes only, and the database refuses updates or deletes on it.
+
+## Tests and evaluation
+
+```bash
+.venv/bin/python -m pytest -q tests                 # no network; the store tests use a separate nyayantra_test database
+.venv/bin/python -m eval.retrieval_eval             # recall@5 on 74 gold questions
+.venv/bin/python -m eval.answers_smoke              # live: 8 questions, 10 invented-citation traps, 2 foreign-law
+.venv/bin/python -m eval.clauses_eval               # live: 24 labelled synthetic clauses plus an injection
+```
+
+See `docs/PLAN.md` for the design and `docs/PROJECT_BRIEF.md` for the brief.

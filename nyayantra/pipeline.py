@@ -54,6 +54,8 @@ def research(question: str, as_of: dt.date | None = None, mode: str = "accurate"
                                               "Routing: confidential requests stay on Groq (no free-tier fallback)" if red.sensitive else
                                               "Routing: public request; Gemini fallback permitted"]})
     q = red.text
+    # kept in memory for the caller (the store re-redacts with it); never sent to a model or logged
+    result["_private"] = {"mapping": red.mapping, "redacted_input": q, "sensitivity": sensitivity, "as_of": None}
 
     # 2. screen
     t0 = time.perf_counter()
@@ -74,6 +76,7 @@ def research(question: str, as_of: dt.date | None = None, mode: str = "accurate"
         return _finish(result, trace, t_all, decision="out_of_scope", answer=None,
                        reason="This does not look like a question about Indian law.")
     eff_as_of = as_of or (dt.date.fromisoformat(und["as_of"]) if und["as_of"] else None)
+    result["_private"]["as_of"] = str(eff_as_of) if eff_as_of else None
 
     # 4. retrieve
     t0 = time.perf_counter()

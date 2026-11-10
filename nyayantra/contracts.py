@@ -202,4 +202,5 @@ def _done(rid, text, red, trace, t_all, decision, report, reason) -> dict:
                       "prompt_tokens": sum(c.get("prompt_tokens") or 0 for c in calls if not c.get("cached")),
                       "completion_tokens": sum(c.get("completion_tokens") or 0 for c in calls if not c.get("cached")),
                       "providers": sorted({f"{c['provider']}:{c['model']}" for c in calls})},
-            "latency_ms": round((time.perf_counter() - t_all) * 1000, 1), "trace": trace}
+            "latency_ms": round((time.perf_counter() - t_all) * 1000, 1), "trace": trace,
+            "_private": {"mapping": red.mapping, "redacted_input": red.text, "sensitivity": "confidential", "as_of": None}}
