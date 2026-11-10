@@ -37,6 +37,7 @@ MODELS = {
     "helper":    {"groq": "openai/gpt-oss-20b", "gemini": "gemini-3.5-flash-lite"},
     "guard":     {"groq": "meta-llama/llama-prompt-guard-2-86m"},
     "safeguard": {"groq": "openai/gpt-oss-safeguard-20b"},
+    "judge":     {"groq": "qwen/qwen3.8-27b", "gemini": "gemini-3.5-flash"},   # evaluation only, never in the pipeline
 }
 TIMEOUT_S = 60
 RETRYABLE = {408, 409, 429, 500, 502, 503, 504}
@@ -117,6 +118,8 @@ def _body(provider: str, model: str, system: str | None, user: str, json_mode: b
         if reasoning and model.startswith("openai/gpt-oss"):
             body["reasoning_effort"] = reasoning
             body["include_reasoning"] = False
+        elif model.startswith("qwen/"):
+            body["reasoning_format"] = "hidden"     # Qwen thinks by default; keep only the answer
     else:
         body["max_tokens"] = max_tokens
         if reasoning:
@@ -233,7 +236,7 @@ def chat(role: str, system: str | None, user: str, *, stage: str, sensitivity: s
             except LLMError as e:
                 # Groq refuses a json_object reply that is not valid JSON (HTTP 400). Ask once more without
                 # JSON mode and let parse_json() read the reply; the caller's schema checks still apply.
-                if not (e.status == 400 and "validate json" in str(e).lower() and "response_format" in body):
+                if not (e.status == 400 and re.search(r"(validate|generate) json", str(e), re.I) and "response_format" in body):
                     raise
                 body = {k: v for k, v in body.items() if k != "response_format"}
                 key = _cache_key(prov, body)

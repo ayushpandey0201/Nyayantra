@@ -8,8 +8,8 @@
   quotes       quotes that appear verbatim in the cited source (the guardrail's word-alignment check, threshold 0.95)
   repealed     relies on a repealed provision without saying it was repealed (not counted for as-of-past-date questions)
   trap         for invented-authority questions: did the shown answer describe the invented authority as real?
-  judge        Gemini 3.5 Flash grades correctness against the gold law text (a different model family from the
-               generator; public benchmark questions only, no client text)
+  judge        Qwen 3.8 27B grades correctness against the gold law text (a different model family from the
+               gpt-oss generator; public benchmark questions only, no client text)
 """
 from __future__ import annotations
 
@@ -188,23 +188,27 @@ def _reference(q: dict) -> str:
     return "\n\n".join(parts)
 
 
-JUDGE_GAP_S = 13      # Gemini free tier: about 5 requests a minute
+JUDGE_PROVIDER = "groq"   # Qwen 3.8 27B: a different model family from the gpt-oss generator. Gemini 3.5 Flash was the
+                          # first choice but its free tier allowed about 20 requests a day (eval/results/bench/judge_gemini_partial.jsonl)
+JUDGE_GAP_S = 0
 
 
 def _judge_call(system: str, user: str, stage: str, version: str, max_tokens: int) -> dict:
-    """One judge call on Gemini, paced, waiting out per-minute limits (3 tries) before giving up for the day."""
+    """One judge call on Gemini, paced, waiting out per-minute limits and overloads (6 tries) before giving up for the day."""
     import time
-    for attempt in range(3):
+    for attempt in range(6):
         try:
-            c = llm.chat("main", system, user, stage=stage, sensitivity="public", max_tokens=max_tokens, provider="gemini",
+            c = llm.chat("judge", system, user, stage=stage, sensitivity="public", max_tokens=max_tokens, provider=JUDGE_PROVIDER,
                          prompt_version=version, reasoning="low")
-            if not c["cached"]:
+            if llm.parse_json(c["raw"]) is None and c.get("finish_reason") == "length" and max_tokens < 1500:
+                return _judge_call(system, user, stage, version, 1500)      # the grade was cut off; once more with room
+            if not c["cached"] and JUDGE_GAP_S:
                 time.sleep(JUDGE_GAP_S)
             return c
         except llm.LLMError as e:
-            if "429" not in str(e) or attempt == 2:
+            if not any(code in str(e) for code in ("429", "503", "500")) or attempt == 5:
                 raise
-            time.sleep(65)
+            time.sleep(65)   # per-minute quota or a temporary overload
 
 
 def judge_all() -> None:
@@ -249,6 +253,27 @@ def judge_all() -> None:
                 f.write(json.dumps(rec, ensure_ascii=False) + "\n")
             n += 1
             print(f"  judged {cfg} {row['id']}: {rec['verdict']} error={rec['legal_error']}", flush=True)
+    # what the guardrail withheld: grade the last draft, so the report can say whether good answers were blocked
+    for row in _rows("C4") + _rows("C4R"):
+        key = (row["config"] + "-draft", row["id"])
+        d = row.get("draft") or {}
+        if key in done or row.get("decision") != "withhold" or not d.get("answer") or qs[row["id"]]["kind"] in ("trap", "outside"):
+            continue
+        q = qs[row["id"]]
+        user = (f"<question>\n{q['q']}\n</question>\nLaw as of: {q.get('as_of') or '2026-11-10'}\n<reference_law>\n{_reference(q)}\n"
+                f"</reference_law>\n<answer>\n{d['answer']}\n</answer>")
+        try:
+            c = _judge_call(JUDGE_SYSTEM, user, "judge", JUDGE_V, 600)
+        except llm.LLMError as e:
+            print(f"judge stopped at {key}: {e}")
+            return
+        v = llm.parse_json(c["raw"]) or {}
+        rec = {"config": key[0], "id": row["id"], "kind": q["kind"], "verdict": v.get("verdict"), "legal_error": v.get("legal_error"),
+               "error": v.get("error"), "reason": v.get("reason"), "model": c["model"], "cached": c["cached"]}
+        with path.open("a") as f:
+            f.write(json.dumps(rec, ensure_ascii=False) + "\n")
+        n += 1
+        print(f"  judged {key[0]} {row['id']}: {rec['verdict']} error={rec['legal_error']}", flush=True)
     print(f"judged {n} new answers")
 
 
@@ -264,7 +289,7 @@ def report() -> None:
         if (OUT / "judge.jsonl").exists() else {}
     cfgs = [c for c in CONFIG_ORDER if any(s["config"] == c for s in scores)]
     L = ["# Benchmark results", "", f"Questions: {len(qs)} ({', '.join(f'{k} {sum(q['kind'] == k for q in qs.values())}' for k in dict.fromkeys(q['kind'] for q in qs.values()))}). "
-         "Answer model: openai/gpt-oss-120b on Groq for every configuration; judge: Gemini 3.5 Flash.", ""]
+         "Answer model: openai/gpt-oss-120b on Groq for every configuration; judge: Qwen 3.8 27B on Groq (a different model family).", ""]
     head = "| Metric | " + " | ".join(cfgs) + " |"
     L += [head, "|---|" + "---|" * len(cfgs)]
 
@@ -302,8 +327,9 @@ def report() -> None:
     row("outside Indian law: answered", lambda ss, c: _pct(sum(s["shown"] and not s["refused"] for s in outside(ss)), len(outside(ss))))
     row("answer-model tokens per question (mean)", lambda ss, c: f"{statistics.mean(s['usage']['tokens_main'] for s in ss):.0f}" if ss else "-")
     row("LLM calls per question (mean)", lambda ss, c: f"{statistics.mean(s['usage']['llm_calls'] for s in ss):.1f}" if ss else "-")
-    row("latency, median (s)", lambda ss, c: f"{statistics.median(s['latency_ms'] for s in ss if not s['usage']['cached']) / 1000:.1f}"
-        if any(not s["usage"]["cached"] for s in ss) else "cached")
+    live = lambda ss: [s for s in ss if s["usage"]["cached"] < s["usage"]["llm_calls"]]     # not replayed entirely from the cache
+    row("latency, median (s, includes waiting for the free-tier token limit)",
+        lambda ss, c: f"{statistics.median(s['latency_ms'] for s in live(ss)) / 1000:.1f}" if live(ss) else "cached")
 
     L += ["", "## Cites the gold law, by question kind", "", "| Kind | " + " | ".join(cfgs) + " |", "|---|" + "---|" * len(cfgs)]
     for k in dict.fromkeys(q["kind"] for q in qs.values() if q["gold"]):
@@ -316,6 +342,10 @@ def report() -> None:
               f"- decisions: " + ", ".join(f"{d} {sum(s['decision'] == d for s in scores if s['config'] == 'C4')}"
                                           for d in ("pass", "review", "insufficient", "withhold", "blocked", "out_of_scope")),
               f"- repaired once: {sum(bool(s.get('repaired')) for s in scores if s['config'] == 'C4')}",
+              "- withheld drafts, as graded by the judge: " + ", ".join(
+                  f"{s['id']} {judged.get(('C4-draft', s['id']), {}).get('verdict', 'not graded')}"
+                  + (" (legal error)" if judged.get(("C4-draft", s["id"]), {}).get("legal_error") else "")
+                  for s in scores if s["config"] == "C4" and s["decision"] == "withhold"),
               f"- drafts with a non-existent section: {sum(bool(s['draft'].get('invented')) for s in c4)}; shown: {sum(bool(s.get('invented')) for s in c4 if s['shown'])}",
               f"- drafts with a bad or out-of-context id: {sum(bool(s['draft'].get('bad_ids')) for s in c4)}; shown: {sum(bool(s.get('bad_ids')) for s in c4 if s['shown'])}",
               f"- draft quotes not verbatim: {sum(s['draft'].get('quotes', 0) - s['draft'].get('quotes_verbatim', 0) for s in c4)}; "
@@ -339,6 +369,7 @@ def _spotcheck(judged: dict, qs: dict) -> None:
         return       # written once, after every main configuration has been judged, so the sample covers all four
     rows = {(r["config"], r["id"]): r for c in CONFIG_ORDER for r in _rows(c)}
     graded = sorted(k for k, j in judged.items() if "verdict" in j)
+    graded = [k for k in graded if not k[0].endswith("-draft")]
     sample = random.Random(7).sample(graded, min(24, len(graded)))
     with path.open("w", newline="") as f:
         w = csv.writer(f)

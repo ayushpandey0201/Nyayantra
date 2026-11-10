@@ -11,7 +11,7 @@ date is fixed (BENCH_TODAY) so prompts are identical across days and every reply
 
   python -m eval.benchmark run [--configs C1 C4 ...] [--limit N]    # resumable; stops at Groq's daily limit
   python -m eval.benchmark score                                    # deterministic metrics -> scores.jsonl
-  python -m eval.benchmark judge                                    # Gemini grades correctness (public questions only)
+  python -m eval.benchmark judge                                    # Qwen (Groq) grades correctness (public questions only)
   python -m eval.benchmark report                                   # eval/results/bench/report.md
 
 Results go to eval/results/bench/ (git-ignored). Questions: a stratified 35 from eval/retrieval_gold.yaml,
