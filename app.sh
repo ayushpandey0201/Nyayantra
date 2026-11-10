@@ -16,10 +16,12 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 ROOT="$PWD"
-PORT="${PORT:-8010}"
 PY="$ROOT/.venv/bin/python"
 RUN="$ROOT/.run"
 PIDFILE="$RUN/api.pid"
+PORTFILE="$RUN/api.port"
+# a running server keeps the port it was started on
+if [[ -f "$PIDFILE" && -f "$PORTFILE" ]] && kill -0 "$(cat "$PIDFILE")" 2>/dev/null; then PORT="$(cat "$PORTFILE")"; else PORT="${PORT:-8010}"; fi
 LOG="$RUN/api.log"
 DB="${NYAYANTRA_DB:-nyayantra}"
 URL="http://127.0.0.1:$PORT"
@@ -75,7 +77,7 @@ cmd_start() {
     exec "$ROOT/.venv/bin/uvicorn" nyayantra.api:app --port "$PORT"
   fi
   nohup "$ROOT/.venv/bin/uvicorn" nyayantra.api:app --port "$PORT" >"$LOG" 2>&1 &
-  echo $! >"$PIDFILE"
+  echo $! >"$PIDFILE"; echo "$PORT" >"$PORTFILE"
   printf '  … starting'
   for _ in $(seq 1 60); do
     curl -sf "$URL/health" >/dev/null 2>&1 && break
@@ -97,7 +99,7 @@ open_console() { [[ -n "${NO_OPEN:-}" ]] && { echo "  console: $URL/console"; re
 
 cmd_stop() {
   if running; then
-    kill "$(cat "$PIDFILE")" && rm -f "$PIDFILE" && ok "stopped"
+    kill "$(cat "$PIDFILE")" && rm -f "$PIDFILE" "$PORTFILE" && ok "stopped"
   else
     rm -f "$PIDFILE"; warn "not running"
   fi
